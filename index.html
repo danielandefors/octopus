@@ -547,6 +547,10 @@
               <span class="control-key">D</span> / <span class="control-key">→</span>
               <span>STEER HORIZONTAL</span>
             </div>
+            <div class="control-row">
+              <span class="control-key">ENTER</span>
+              <span>START / RESTART GAME</span>
+            </div>
           </div>
 
           <div class="food-legend">
@@ -565,7 +569,7 @@
           </div>
 
           <button id="startBtn" class="btn-retro">START GAME</button>
-          <div class="footer-credit">INSERT COIN TO INITIALIZE</div>
+          <div class="footer-credit">INSERT COIN OR PRESS ENTER</div>
         </div>
 
         <!-- 2. Game Over Screen Menu -->
@@ -585,7 +589,7 @@
           </div>
 
           <button id="restartBtn" class="btn-retro">PLAY AGAIN</button>
-          <div class="footer-credit">CONTINUES: 99</div>
+          <div class="footer-credit">PRESS ENTER TO REINITIALIZE</div>
         </div>
 
         <!-- HTML5 Canvas for the Game -->
@@ -612,9 +616,48 @@
         this.tempo = 126;          // Driving BPM
         this.lookahead = 25.0;     // Milliseconds
         this.scheduleAheadTime = 0.1; // Seconds
+        this.globalLoopCount = 0;  // Tracks progressive loops
         
         // Music state
         this.isPlayingMusic = false;
+
+        // Randomized high soaring counter-melodies (3 distinct 64-step tracks)
+        this.highMelodyPatterns = [];
+        this.currentPatternIndex = 0;
+        this.consecutivePatternCount = 1; // Double repeats preventative count
+
+        this.setupMelodyPatterns();
+      }
+
+      setupMelodyPatterns() {
+        // --- Pattern 0: Dreamy Soaring ---
+        const p0 = new Array(64).fill(0);
+        p0[0] = 1318.51;  // E6 (whole note)
+        p0[16] = 1567.98; // G6 (half note)
+        p0[24] = 1760.00; // A6 (half note)
+        p0[32] = 1174.66; // D6 (whole note)
+        p0[48] = 1046.50; // C6 (half note)
+        p0[56] = 987.77;  // B5 (half note)
+
+        // --- Pattern 1: Optimistic Flight (Pentatonic Climb) ---
+        const p1 = new Array(64).fill(0);
+        p1[0] = 1760.00;  // A6 (whole note)
+        p1[16] = 2093.00; // C7 (half note)
+        p1[24] = 2637.02; // E7 (half note)
+        p1[32] = 1567.98; // G6 (whole note)
+        p1[48] = 1318.51; // E6 (half note)
+        p1[56] = 1174.66; // D6 (half note)
+
+        // --- Pattern 2: Mystical Horizon (Atmospheric Descending) ---
+        const p2 = new Array(64).fill(0);
+        p2[0] = 1318.51;  // E6 (whole note)
+        p2[16] = 1174.66; // D6 (half note)
+        p2[24] = 1046.50; // C6 (half note)
+        p2[32] = 987.77;   // B5 (whole note)
+        p2[48] = 880.00;   // A5 (half note)
+        p2[56] = 783.99;   // G5 (half note)
+
+        this.highMelodyPatterns = [p0, p1, p2];
       }
 
       init() {
@@ -649,6 +692,9 @@
         this.nextNoteTime = this.ctx.currentTime;
         this.currentStep = 0;
         this.globalStep = 0;
+        this.globalLoopCount = 0;
+        this.currentPatternIndex = Math.floor(Math.random() * this.highMelodyPatterns.length);
+        this.consecutivePatternCount = 1;
         this.scheduler();
       }
 
@@ -672,7 +718,6 @@
         gain.connect(this.masterVolume);
         
         osc.frequency.setValueAtTime(140, time);
-        // Exponential sweep from 140Hz down to 40Hz for heavy retro sub punch
         osc.frequency.exponentialRampToValueAtTime(40, time + 0.12);
         
         gain.gain.setValueAtTime(1.0, time);
@@ -728,8 +773,8 @@
         pop.stop(time + 0.09);
       }
 
-      // 3. Hi-Hat Ticks (High-frequency white noise ticks for off-beat speed driving)
-      playHihat(time) {
+      // 3. Hi-Hat Ticks (High-frequency white noise ticks. Supports loudness multiplier)
+      playHihat(time, volumeMultiplier = 1.0) {
         if (!this.ctx || this.isMuted) return;
 
         const bufferSize = this.ctx.sampleRate * 0.04;
@@ -747,7 +792,7 @@
         filter.frequency.value = 8500;
 
         const gain = this.ctx.createGain();
-        gain.gain.setValueAtTime(0.12, time); // Subtle sharp tick
+        gain.gain.setValueAtTime(0.12 * volumeMultiplier, time);
         gain.gain.exponentialRampToValueAtTime(0.001, time + 0.035);
 
         noiseNode.connect(filter);
@@ -758,8 +803,8 @@
         noiseNode.stop(time + 0.04);
       }
 
-      // 4. Driving Bassline (Galloping / Moroder Bass)
-      playBass(freq, time, duration) {
+      // 4. Driving Bassline (Galloping / Moroder Bass. Supports Stage 2 and 3 sweeps)
+      playBass(freq, time, duration, globalLoopCount = 0) {
         if (!this.ctx || this.isMuted) return;
 
         const osc1 = this.ctx.createOscillator();
@@ -771,14 +816,27 @@
         osc1.frequency.setValueAtTime(freq, time);
         
         osc2.type = 'triangle';
-        osc2.frequency.setValueAtTime(freq / 2, time); // Sub-bass octave lower
+        osc2.frequency.setValueAtTime(freq / 2, time);
+
+        // Filter sweeps based on progressive Stages (Stage 2 at 6 loops, Stage 3 at 10 loops)
+        let startCutoff = 260;
+        let endCutoff = 1100;
+        
+        if (globalLoopCount >= 10) { // Stage 3 Apex
+          startCutoff = 550;
+          endCutoff = 2700;
+        } else if (globalLoopCount >= 6) { // Stage 2 High
+          startCutoff = 420;
+          endCutoff = 2000;
+        }
 
         filter.type = 'lowpass';
-        filter.frequency.setValueAtTime(260, time);
-        filter.frequency.exponentialRampToValueAtTime(1100, time + 0.05); // Rapid filter envelope sweep
+        filter.frequency.setValueAtTime(startCutoff, time);
+        filter.frequency.exponentialRampToValueAtTime(endCutoff, time + 0.05);
         filter.frequency.exponentialRampToValueAtTime(150, time + duration);
 
-        gain.gain.setValueAtTime(0.75, time);
+        const gainLevel = globalLoopCount >= 10 ? 0.90 : globalLoopCount >= 6 ? 0.82 : 0.75;
+        gain.gain.setValueAtTime(gainLevel, time); 
         gain.gain.exponentialRampToValueAtTime(0.01, time + duration);
 
         osc1.connect(filter);
@@ -793,7 +851,39 @@
         osc2.stop(time + duration);
       }
 
-      // 5. Ambient Chord Pad (Chords wash)
+      // 5. Warm, Softer Synth Chords (Warm plucked triangle waves)
+      playSoftChord(chordFreqs, time, duration, globalLoopCount = 0) {
+        if (!this.ctx || this.isMuted) return;
+
+        const chordGain = this.ctx.createGain();
+        chordGain.gain.setValueAtTime(0, time);
+        chordGain.gain.linearRampToValueAtTime(0.08, time + 0.035); 
+        chordGain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+
+        // Open up soft chords filter in Stage 3 for brilliant harmony
+        const startCutoff = globalLoopCount >= 10 ? 1200 : 850;
+        const endCutoff = globalLoopCount >= 10 ? 550 : 350;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(startCutoff, time);
+        filter.frequency.exponentialRampToValueAtTime(endCutoff, time + duration);
+
+        chordFreqs.forEach(freq => {
+          const osc = this.ctx.createOscillator();
+          osc.type = 'triangle'; 
+          osc.frequency.setValueAtTime(freq, time);
+          
+          osc.connect(filter);
+          osc.start(time);
+          osc.stop(time + duration + 0.05);
+        });
+
+        filter.connect(chordGain);
+        chordGain.connect(this.masterVolume);
+      }
+
+      // 6. Ambient Chord Pad (Chords wash)
       playPad(chordFreqs, time, duration) {
         if (!this.ctx || this.isMuted) return;
 
@@ -809,7 +899,7 @@
           filter.frequency.value = 500;
 
           gain.gain.setValueAtTime(0, time);
-          gain.gain.linearRampToValueAtTime(0.1, time + 0.5); // slow attack
+          gain.gain.linearRampToValueAtTime(0.1, time + 0.5); 
           gain.gain.setValueAtTime(0.1, time + duration - 0.5);
           gain.gain.linearRampToValueAtTime(0, time + duration);
 
@@ -822,12 +912,12 @@
         });
       }
 
-      // 6. retro lead synthesizer (Melody on Top)
-      playLead(freq, time, duration) {
+      // 7. retro lead synthesizer (Primary Melody. Supports progressive filter sweeps)
+      playLead(freq, time, duration, isHighIntensity = false) {
         if (!this.ctx || this.isMuted) return;
 
         const osc1 = this.ctx.createOscillator();
-        const osc2 = this.ctx.createOscillator(); // Detuned saw for fat chorus
+        const osc2 = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
         const filter = this.ctx.createBiquadFilter();
 
@@ -835,21 +925,23 @@
         osc1.frequency.setValueAtTime(freq, time);
 
         osc2.type = 'sawtooth';
-        osc2.frequency.setValueAtTime(freq + 2, time); // 2Hz detuning
+        osc2.frequency.setValueAtTime(freq + 2, time);
+
+        const startCutoff = isHighIntensity ? 950 : 750;
+        const endCutoff = isHighIntensity ? 2800 : 2200;
 
         filter.type = 'lowpass';
-        filter.frequency.setValueAtTime(750, time);
-        filter.frequency.exponentialRampToValueAtTime(2200, time + 0.04);
+        filter.frequency.setValueAtTime(startCutoff, time);
+        filter.frequency.exponentialRampToValueAtTime(endCutoff, time + 0.04);
         filter.frequency.exponentialRampToValueAtTime(550, time + duration);
 
         gain.gain.setValueAtTime(0, time);
-        gain.gain.linearRampToValueAtTime(0.08, time + 0.02); // Fast attack
-        gain.gain.exponentialRampToValueAtTime(0.035, time + duration - 0.02); // Decay-sustain
-        gain.gain.exponentialRampToValueAtTime(0.001, time + duration); // Release
+        gain.gain.linearRampToValueAtTime(isHighIntensity ? 0.09 : 0.08, time + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.035, time + duration - 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
 
         osc1.connect(filter);
         
-        // Soft volume mix for saw detune
         const sawMix = this.ctx.createGain();
         sawMix.gain.setValueAtTime(0.12, time);
         osc2.connect(sawMix);
@@ -864,7 +956,45 @@
         osc2.stop(time + duration);
       }
 
-      // 7. Advanced 8-Bit Eating SFX Tiers
+      // 8. Soaring Space Counter-Melody Synth (Sine voice flying high above)
+      playHighLead(freq, time, duration) {
+        if (!this.ctx || this.isMuted) return;
+
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        const filter = this.ctx.createBiquadFilter();
+
+        osc.type = 'sine'; 
+        osc.frequency.setValueAtTime(freq, time);
+
+        const lfo = this.ctx.createOscillator();
+        const lfoGain = this.ctx.createGain();
+        lfo.frequency.value = 5.5; 
+        lfoGain.gain.value = 5.0; 
+        
+        lfo.connect(lfoGain);
+        lfoGain.connect(osc.frequency);
+
+        filter.type = 'lowpass';
+        filter.frequency.value = 1200;
+
+        gain.gain.setValueAtTime(0, time);
+        gain.gain.linearRampToValueAtTime(0.065, time + 0.40); 
+        gain.gain.setValueAtTime(0.065, time + duration - 0.40);
+        gain.gain.linearRampToValueAtTime(0.001, time + duration); 
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.masterVolume);
+
+        lfo.start(time);
+        osc.start(time);
+        
+        lfo.stop(time + duration);
+        osc.stop(time + duration);
+      }
+
+      // 9. Advanced 8-Bit Eating SFX Tiers
       playEatSFX(type) {
         this.init();
         if (!this.ctx || this.isMuted) return;
@@ -872,7 +1002,6 @@
         const now = this.ctx.currentTime;
 
         if (type === 0) {
-          // Common: classic upwards pitch sweep
           const osc = this.ctx.createOscillator();
           const gain = this.ctx.createGain();
           osc.type = 'triangle';
@@ -888,12 +1017,11 @@
           osc.stop(now + 0.13);
         } 
         else if (type === 1) {
-          // Rare: 8-bit double ping arpeggio
           const osc = this.ctx.createOscillator();
           const gain = this.ctx.createGain();
-          osc.type = 'square'; // Chunky vintage bite
-          osc.frequency.setValueAtTime(523.25, now); // C5
-          osc.frequency.setValueAtTime(659.25, now + 0.06); // E5
+          osc.type = 'square'; 
+          osc.frequency.setValueAtTime(523.25, now); 
+          osc.frequency.setValueAtTime(659.25, now + 0.06); 
           
           gain.gain.setValueAtTime(0.2, now);
           gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
@@ -904,8 +1032,7 @@
           osc.stop(now + 0.16);
         } 
         else {
-          // Exclusive: Epic major arpeggio synth chord sweep!
-          const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6 (C Major chord sweep)
+          const notes = [523.25, 659.25, 783.99, 1046.50]; 
           notes.forEach((freq, idx) => {
             const osc = this.ctx.createOscillator();
             const gain = this.ctx.createGain();
@@ -931,6 +1058,67 @@
         }
       }
 
+      // 10. Sad retro crash game over sweep (FIXED: Resolved JS ReferenceError)
+      playGameOverSFX() {
+        this.init();
+        if (!this.ctx || this.isMuted) return;
+
+        const now = this.ctx.currentTime;
+        
+        // Sad minor sweep chord drop
+        const chord = [220.00, 261.63, 329.63]; 
+        chord.forEach(freq => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          const filter = this.ctx.createBiquadFilter();
+
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(freq, now);
+          osc.frequency.exponentialRampToValueAtTime(freq * 0.15, now + 0.75);
+
+          filter.type = 'lowpass';
+          filter.frequency.setValueAtTime(900, now);
+          filter.frequency.exponentialRampToValueAtTime(60, now + 0.7);
+
+          gain.gain.setValueAtTime(0.4, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.75);
+
+          osc.connect(filter);
+          filter.connect(gain);
+          gain.connect(this.masterVolume);
+
+          osc.start(now);
+          osc.stop(now + 0.8);
+        });
+
+        // Crash burst noise
+        const bufferSize = this.ctx.sampleRate * 0.45;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buffer;
+
+        const noiseFilter = this.ctx.createBiquadFilter();
+        noiseFilter.type = 'lowpass';
+        noiseFilter.frequency.setValueAtTime(550, now);
+        noiseFilter.frequency.exponentialRampToValueAtTime(30, now + 0.4);
+
+        const noiseGain = this.ctx.createGain();
+        noiseGain.gain.setValueAtTime(0.45, now);
+        noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+
+        noise.connect(noiseFilter);
+        noiseFilter.connect(noiseGain);
+        noiseGain.connect(this.masterVolume); // FIXED: Corrected 'gain' to 'noiseGain' to prevent ReferenceError!
+
+        noise.start(now);
+        noise.stop(now + 0.45);
+      }
+
       // --- SEQUENCER CLOCK ---
       scheduler() {
         if (!this.isPlayingMusic) return;
@@ -945,11 +1133,40 @@
 
       advanceStep() {
         const secondsPerBeat = 60.0 / this.tempo;
-        const secondsPerStep = secondsPerBeat / 4; // 16th notes
+        const secondsPerStep = secondsPerBeat / 4; 
         this.nextNoteTime += secondsPerStep;
 
         this.currentStep = (this.currentStep + 1) % 16;
-        this.globalStep = (this.globalStep + 1) % 64; // Melody loops every 4 measures (64 steps)
+        
+        const lastGlobalStep = this.globalStep;
+        this.globalStep = (this.globalStep + 1) % 64;
+        
+        if (this.globalStep === 0 && lastGlobalStep === 63) {
+          this.globalLoopCount++; 
+          
+          // Trigger Stage warning alerts (Stage 2 at 6 loops, Stage 3 at 10 loops!)
+          if (this.globalLoopCount === 6) {
+            alertText = "ALERT: STAGE 2 INTENSITY ENGAGED";
+            alertTimer = 110;
+          } else if (this.globalLoopCount === 10) {
+            alertText = "WARNING: STAGE 3 APEX INTENSITY ENGAGED";
+            alertTimer = 130;
+          }
+
+          // Randomize soaring counterpoint tracks, guaranteeing no track repeats > twice consecutively
+          let nextPatternIndex = Math.floor(Math.random() * this.highMelodyPatterns.length);
+          if (nextPatternIndex === this.currentPatternIndex) {
+            this.consecutivePatternCount++;
+            if (this.consecutivePatternCount >= 2) {
+              const otherIndices = [0, 1, 2].filter(idx => idx !== this.currentPatternIndex);
+              nextPatternIndex = otherIndices[Math.floor(Math.random() * otherIndices.length)];
+              this.consecutivePatternCount = 1;
+            }
+          } else {
+            this.consecutivePatternCount = 1;
+          }
+          this.currentPatternIndex = nextPatternIndex;
+        }
       }
 
       scheduleNextStep(step, time) {
@@ -988,40 +1205,66 @@
         }
 
         const stepDuration = (60.0 / this.tempo) / 4;
+        
+        // Stages logic
+        const isStage2 = (this.globalLoopCount >= 6 && this.globalLoopCount < 10);
+        const isStage3 = (this.globalLoopCount >= 10);
+        const isIntensityEngaged = (this.globalLoopCount >= 6); // Stage 2 or 3
 
         // --- 1. SYNCAPATED DRIVING BASSLINE ---
-        // A highly rhythmic, driving off-beat syncopation gallop pattern
         const bassRhythm = [0, 2, 3, 4, 6, 8, 10, 11, 12, 14];
         if (bassRhythm.includes(step)) {
           const isOctave = (step === 3 || step === 11);
           const freq = isOctave ? activeRoot * 2 : activeRoot;
-          this.playBass(freq, time, stepDuration * 0.95);
+          this.playBass(freq, time, stepDuration * 0.95, this.globalLoopCount);
         }
 
-        // --- 2. DRIVING DRUMS TRACK ---
-        // Syncopated Kick Drum: Beats 1, 1-and-a-half (offbeat syncopation), 3, 3-and-a-half
+        // --- 2. ATMOSPHERIC SOFT SYNTH CHORDS (Syncopated pattern) ---
+        const chordRhythm = [2, 5, 8, 10, 13];
+        if (chordRhythm.includes(step)) {
+          this.playSoftChord(activePad, time, stepDuration * 1.5, this.globalLoopCount);
+        }
+
+        // --- 3. DRIVING DRUMS TRACK ---
         if (step === 0 || step === 3 || step === 8 || step === 11) {
           this.playKick(time);
         }
         
-        // Snare on Beats 2 & 4 (Steps 4 and 12)
         if (step === 4 || step === 12) {
           this.playSnare(time);
         }
 
-        // Hi-Hat ticks on offbeats to provide acceleration feel
-        if (step === 2 || step === 6 || step === 10 || step === 14) {
-          this.playHihat(time);
+        // Hi-Hat rhythms depending on Stage
+        if (isStage3) {
+          // Stage 3: Relentless sixteenth note chugga-chugga speed chug!
+          const isOffbeat = (step === 2 || step === 6 || step === 10 || step === 14);
+          const isDrumBeat = (step === 0 || step === 4 || step === 8 || step === 12);
+          let volumeMult = 0.45;
+          if (isOffbeat) volumeMult = 0.95;
+          else if (isDrumBeat) volumeMult = 0.65;
+          this.playHihat(time, volumeMult);
+        } 
+        else if (isStage2) {
+          // Stage 2: Constant 8th notes (every even step)
+          if (step % 2 === 0) {
+            const volumeMult = (step === 2 || step === 6 || step === 10 || step === 14) ? 1.3 : 0.75;
+            this.playHihat(time, volumeMult);
+          }
+        } 
+        else {
+          // Stage 1: Standard off-beat hats
+          if (step === 2 || step === 6 || step === 10 || step === 14) {
+            this.playHihat(time, 1.0);
+          }
         }
 
-        // --- 3. AMBIENT CHORD WASH ---
+        // --- 4. AMBIENT CHORD WASH ---
         if (step === 0) {
-          const chordDuration = (60.0 / this.tempo) * 4; // 1 whole measure
+          const chordDuration = (60.0 / this.tempo) * 4; 
           this.playPad(activePad, time, chordDuration * 0.98);
         }
 
-        // --- 4. RETRO LEAD MELODY ---
-        // A catchy, syncopated 80s lead hooks sequence (64 steps loop)
+        // --- 5. RETRO LEAD MELODY (Primary hook) ---
         const melody = [
           // Bar 1 (A Minor hook)
           659.25, 0, 0, 783.99, 0, 880.00, 0, 0, 659.25, 0, 587.33, 0, 659.25, 0, 0, 0,
@@ -1035,8 +1278,23 @@
 
         const targetFreq = melody[this.globalStep];
         if (targetFreq > 0) {
-          // Play notes with slight legato overlay
-          this.playLead(targetFreq, time, stepDuration * 1.8);
+          this.playLead(targetFreq, time, stepDuration * 1.8, isIntensityEngaged);
+          
+          // Stage 3: Double lead hook octave layer for screaming analog brightness!
+          if (isStage3) {
+            this.playLead(targetFreq * 2, time, stepDuration * 1.5, true);
+          }
+        }
+
+        // --- 6. SOARING SPACE HIGH MELODY (Starts at loop count >= 2, randomized sequence pattern) ---
+        if (this.globalLoopCount >= 2) {
+          const activePattern = this.highMelodyPatterns[this.currentPatternIndex];
+          const highFreq = activePattern[this.globalStep];
+          if (highFreq > 0) {
+            const noteSteps = (this.globalStep === 0 || this.globalStep === 32) ? 16 : 8;
+            const noteDuration = stepDuration * noteSteps;
+            this.playHighLead(highFreq, time, noteDuration * 0.98);
+          }
         }
       }
     }
@@ -1123,9 +1381,6 @@
       }
 
       // Choose Food Type based on probability distribution
-      // 70% Common (0.0 to 0.7)
-      // 20% Rare (0.7 to 0.9)
-      // 10% Exclusive (0.9 to 1.0)
       const randVal = Math.random();
       let type = 0;
       let color = '#00ffff';
@@ -1198,8 +1453,8 @@
       }
     }
 
+    // Explode helper
     function createExplosion(x, y, color, count) {
-      // Speed up particles depending on rarity
       const speedMultiplier = food.type === 0 ? 1.0 : food.type === 1 ? 1.35 : 1.8;
       for (let i = 0; i < count; i++) {
         particles.push(new Particle(x, y, color, speedMultiplier));
@@ -1391,11 +1646,18 @@
         ctx.save();
         ctx.font = '8px "Press Start 2P"';
         ctx.fillStyle = food.color;
+        
+        // Highlight transition alerts
+        if (alertText.includes("STAGE 3")) {
+          ctx.fillStyle = "#ff007f"; // Red alert pink
+        } else if (alertText.includes("STAGE 2")) {
+          ctx.fillStyle = "#ffe600"; // Yellow alert gold
+        }
+        
         ctx.shadowBlur = 10;
-        ctx.shadowColor = food.color;
+        ctx.shadowColor = ctx.fillStyle;
         ctx.textAlign = 'center';
         
-        // Dynamic terminal glitch alpha fade
         if (alertTimer < 20) {
           ctx.globalAlpha = alertTimer / 20;
         } else {
@@ -1483,11 +1745,25 @@
       drawGame();
     }
 
-    // --- INPUT PROCESSING (Input Queuing Keyboard Steering) ---
+    // --- INPUT PROCESSING (Keyboard Steering & Global Controls) ---
     document.addEventListener('keydown', e => {
-      const arrows = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '];
+      const arrows = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Enter'];
       if (arrows.includes(e.key) && gameActive) {
         e.preventDefault();
+      }
+
+      // Global Start/Restart control via Enter key
+      if (e.key === 'Enter') {
+        if (!gameActive) {
+          if (!startScreen.classList.contains('hidden')) {
+            startScreen.classList.add('hidden');
+            initializeGame();
+          } else if (!gameOverScreen.classList.contains('hidden')) {
+            gameOverScreen.classList.add('hidden');
+            initializeGame();
+          }
+        }
+        return;
       }
 
       if (!gameActive) return;
@@ -1544,12 +1820,16 @@
       gameLoopInterval = setInterval(gameStep, currentSpeed);
     }
 
+    // Process Game Over state
     function handleGameOver() {
       gameActive = false;
       clearInterval(gameLoopInterval);
       
-      // Stop sequencer
+      // Stop background sequencer
       audio.stopMusic();
+      
+      // Play 8-bit crash synth SFX
+      audio.playGameOverSFX();
 
       // Set score stats
       finalScoreVal.textContent = String(score).padStart(4, '0');
