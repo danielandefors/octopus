@@ -354,7 +354,7 @@
     .game-info-text {
       font-size: 14px;
       color: #bd00ff;
-      margin-bottom: 40px;
+      margin-bottom: 30px;
       letter-spacing: 2px;
       text-transform: uppercase;
       text-shadow: 0 0 8px rgba(189, 0, 255, 0.4);
@@ -365,24 +365,53 @@
       background: rgba(0, 255, 255, 0.05);
       border: 1px solid rgba(0, 255, 255, 0.2);
       border-radius: 8px;
-      padding: 15px 30px;
-      margin-bottom: 40px;
+      padding: 12px 24px;
+      margin-bottom: 25px;
       display: flex;
-      gap: 30px;
+      flex-direction: column;
+      gap: 10px;
       align-items: center;
       color: #b3b3b3;
-      font-size: 12px;
+      font-size: 10px;
+    }
+
+    .control-row {
+      display: flex;
+      gap: 20px;
+      align-items: center;
     }
 
     .control-key {
       background: #2b1b3c;
       border: 2px solid #bd00ff;
       border-radius: 4px;
-      padding: 4px 8px;
+      padding: 3px 6px;
       font-family: 'Press Start 2P', monospace;
       color: #ff007f;
-      font-size: 9px;
+      font-size: 8px;
       box-shadow: 0 0 8px rgba(189, 0, 255, 0.3);
+    }
+
+    /* Food Legend */
+    .food-legend {
+      display: flex;
+      gap: 15px;
+      margin-bottom: 35px;
+      font-family: 'Press Start 2P', monospace;
+      font-size: 8px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      box-shadow: 0 0 8px currentColor;
     }
 
     /* 80s Cyberpunk Buttons */
@@ -508,15 +537,30 @@
           <p class="game-info-text">Cybernetic Serpent Simulator</p>
           
           <div class="controls-guide">
-            <div>
+            <div class="control-row">
               <span class="control-key">W</span> / <span class="control-key">↑</span>
               <span class="control-key">S</span> / <span class="control-key">↓</span>
-              MOVE
+              <span>STEER VERTICAL</span>
             </div>
-            <div>
+            <div class="control-row">
               <span class="control-key">A</span> / <span class="control-key">←</span>
               <span class="control-key">D</span> / <span class="control-key">→</span>
-              STEER
+              <span>STEER HORIZONTAL</span>
+            </div>
+          </div>
+
+          <div class="food-legend">
+            <div class="legend-item" style="color: #00ffff;">
+              <span class="dot" style="background-color: #00ffff;"></span>
+              <span>COMMON (+100)</span>
+            </div>
+            <div class="legend-item" style="color: #ffe600;">
+              <span class="dot" style="background-color: #ffe600;"></span>
+              <span>RARE (+250)</span>
+            </div>
+            <div class="legend-item" style="color: #ff007f;">
+              <span class="dot" style="background-color: #ff007f;"></span>
+              <span>EXCLUSIVE (+500)</span>
             </div>
           </div>
 
@@ -563,9 +607,10 @@
         // Sequencer variables
         this.schedulerTimerId = null;
         this.nextNoteTime = 0.0;
-        this.currentStep = 0;
-        this.tempo = 125; // BPM
-        this.lookahead = 25.0; // Milliseconds
+        this.currentStep = 0;      // 0-15
+        this.globalStep = 0;       // 0-63 (For melody loop synchronization)
+        this.tempo = 126;          // Driving BPM
+        this.lookahead = 25.0;     // Milliseconds
         this.scheduleAheadTime = 0.1; // Seconds
         
         // Music state
@@ -603,6 +648,7 @@
         this.isPlayingMusic = true;
         this.nextNoteTime = this.ctx.currentTime;
         this.currentStep = 0;
+        this.globalStep = 0;
         this.scheduler();
       }
 
@@ -615,7 +661,7 @@
 
       // --- PROCEDURAL SYNTH SOUNDS ---
 
-      // 1. Synth Kick Drum
+      // 1. Synth Kick Drum (Syncopated Bass Kick)
       playKick(time) {
         if (!this.ctx || this.isMuted) return;
 
@@ -625,15 +671,15 @@
         osc.connect(gain);
         gain.connect(this.masterVolume);
         
-        osc.frequency.setValueAtTime(150, time);
-        // Exponential sweep from 150Hz down to 45Hz for classic retro punch
-        osc.frequency.exponentialRampToValueAtTime(45, time + 0.12);
+        osc.frequency.setValueAtTime(140, time);
+        // Exponential sweep from 140Hz down to 40Hz for heavy retro sub punch
+        osc.frequency.exponentialRampToValueAtTime(40, time + 0.12);
         
         gain.gain.setValueAtTime(1.0, time);
-        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.18);
+        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.16);
         
         osc.start(time);
-        osc.stop(time + 0.2);
+        osc.stop(time + 0.18);
       }
 
       // 2. Synth Snare Drum (White Noise through Bandpass Filter)
@@ -641,7 +687,7 @@
         if (!this.ctx || this.isMuted) return;
 
         // Generate white noise buffer
-        const bufferSize = this.ctx.sampleRate * 0.15; // 0.15s duration
+        const bufferSize = this.ctx.sampleRate * 0.15;
         const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
         const data = buffer.getChannelData(0);
         for (let i = 0; i < bufferSize; i++) {
@@ -654,40 +700,70 @@
         // Filter to shape noise
         const filter = this.ctx.createBiquadFilter();
         filter.type = 'bandpass';
-        filter.frequency.value = 1000;
+        filter.frequency.value = 1100;
         filter.Q.value = 2.0;
 
         const gain = this.ctx.createGain();
-        gain.gain.setValueAtTime(0.6, time);
-        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.15);
+        gain.gain.setValueAtTime(0.45, time);
+        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.14);
 
         noiseNode.connect(filter);
         filter.connect(gain);
         gain.connect(this.masterVolume);
 
-        // Add a triangle pop under the snare to give it body
+        // Sub-snare pop node
         const pop = this.ctx.createOscillator();
         const popGain = this.ctx.createGain();
         pop.type = 'triangle';
-        pop.frequency.setValueAtTime(180, time);
-        popGain.gain.setValueAtTime(0.5, time);
+        pop.frequency.setValueAtTime(170, time);
+        popGain.gain.setValueAtTime(0.4, time);
         popGain.gain.exponentialRampToValueAtTime(0.01, time + 0.08);
         
         pop.connect(popGain);
         popGain.connect(this.masterVolume);
 
         noiseNode.start(time);
-        noiseNode.stop(time + 0.15);
+        noiseNode.stop(time + 0.14);
         pop.start(time);
-        pop.stop(time + 0.1);
+        pop.stop(time + 0.09);
       }
 
-      // 3. Driving Synth Bassline (Moroder style)
+      // 3. Hi-Hat Ticks (High-frequency white noise ticks for off-beat speed driving)
+      playHihat(time) {
+        if (!this.ctx || this.isMuted) return;
+
+        const bufferSize = this.ctx.sampleRate * 0.04;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+
+        const noiseNode = this.ctx.createBufferSource();
+        noiseNode.buffer = buffer;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'highpass';
+        filter.frequency.value = 8500;
+
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0.12, time); // Subtle sharp tick
+        gain.gain.exponentialRampToValueAtTime(0.001, time + 0.035);
+
+        noiseNode.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.masterVolume);
+
+        noiseNode.start(time);
+        noiseNode.stop(time + 0.04);
+      }
+
+      // 4. Driving Bassline (Galloping / Moroder Bass)
       playBass(freq, time, duration) {
         if (!this.ctx || this.isMuted) return;
 
         const osc1 = this.ctx.createOscillator();
-        const osc2 = this.ctx.createOscillator(); // Sub-oscillator for warmth
+        const osc2 = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
         const filter = this.ctx.createBiquadFilter();
 
@@ -698,11 +774,11 @@
         osc2.frequency.setValueAtTime(freq / 2, time); // Sub-bass octave lower
 
         filter.type = 'lowpass';
-        filter.frequency.setValueAtTime(300, time);
-        filter.frequency.exponentialRampToValueAtTime(1200, time + 0.05); // Filter envelope sweep
-        filter.frequency.exponentialRampToValueAtTime(200, time + duration);
+        filter.frequency.setValueAtTime(260, time);
+        filter.frequency.exponentialRampToValueAtTime(1100, time + 0.05); // Rapid filter envelope sweep
+        filter.frequency.exponentialRampToValueAtTime(150, time + duration);
 
-        gain.gain.setValueAtTime(0.8, time);
+        gain.gain.setValueAtTime(0.75, time);
         gain.gain.exponentialRampToValueAtTime(0.01, time + duration);
 
         osc1.connect(filter);
@@ -717,7 +793,7 @@
         osc2.stop(time + duration);
       }
 
-      // 4. Background Chord Pad (Atmospheric Synth Chords)
+      // 5. Ambient Chord Pad (Chords wash)
       playPad(chordFreqs, time, duration) {
         if (!this.ctx || this.isMuted) return;
 
@@ -730,12 +806,11 @@
           osc.frequency.setValueAtTime(freq, time);
 
           filter.type = 'lowpass';
-          filter.frequency.value = 600;
+          filter.frequency.value = 500;
 
-          // Slow slow-attack volume envelope for pad wash
           gain.gain.setValueAtTime(0, time);
-          gain.gain.linearRampToValueAtTime(0.12, time + 0.5); // Warm ambient sound level
-          gain.gain.setValueAtTime(0.12, time + duration - 0.5);
+          gain.gain.linearRampToValueAtTime(0.1, time + 0.5); // slow attack
+          gain.gain.setValueAtTime(0.1, time + duration - 0.5);
           gain.gain.linearRampToValueAtTime(0, time + duration);
 
           osc.connect(filter);
@@ -747,36 +822,116 @@
         });
       }
 
-      // 5. Classic 8-Bit "Food Consumed" Sound Effect
-      playEatSFX() {
+      // 6. retro lead synthesizer (Melody on Top)
+      playLead(freq, time, duration) {
+        if (!this.ctx || this.isMuted) return;
+
+        const osc1 = this.ctx.createOscillator();
+        const osc2 = this.ctx.createOscillator(); // Detuned saw for fat chorus
+        const gain = this.ctx.createGain();
+        const filter = this.ctx.createBiquadFilter();
+
+        osc1.type = 'triangle';
+        osc1.frequency.setValueAtTime(freq, time);
+
+        osc2.type = 'sawtooth';
+        osc2.frequency.setValueAtTime(freq + 2, time); // 2Hz detuning
+
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(750, time);
+        filter.frequency.exponentialRampToValueAtTime(2200, time + 0.04);
+        filter.frequency.exponentialRampToValueAtTime(550, time + duration);
+
+        gain.gain.setValueAtTime(0, time);
+        gain.gain.linearRampToValueAtTime(0.08, time + 0.02); // Fast attack
+        gain.gain.exponentialRampToValueAtTime(0.035, time + duration - 0.02); // Decay-sustain
+        gain.gain.exponentialRampToValueAtTime(0.001, time + duration); // Release
+
+        osc1.connect(filter);
+        
+        // Soft volume mix for saw detune
+        const sawMix = this.ctx.createGain();
+        sawMix.gain.setValueAtTime(0.12, time);
+        osc2.connect(sawMix);
+        sawMix.connect(filter);
+
+        filter.connect(gain);
+        gain.connect(this.masterVolume);
+
+        osc1.start(time);
+        osc2.start(time);
+        osc1.stop(time + duration);
+        osc2.stop(time + duration);
+      }
+
+      // 7. Advanced 8-Bit Eating SFX Tiers
+      playEatSFX(type) {
         this.init();
         if (!this.ctx || this.isMuted) return;
 
         const now = this.ctx.currentTime;
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        const filter = this.ctx.createBiquadFilter();
 
-        osc.type = 'triangle'; // Retro square/triangle pulse sweep
-        osc.frequency.setValueAtTime(440, now);
-        // Classic upwards arcade sweep
-        osc.frequency.exponentialRampToValueAtTime(980, now + 0.12);
+        if (type === 0) {
+          // Common: classic upwards pitch sweep
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(440, now);
+          osc.frequency.exponentialRampToValueAtTime(880, now + 0.12);
+          
+          gain.gain.setValueAtTime(0.55, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+          
+          osc.connect(gain);
+          gain.connect(this.masterVolume);
+          osc.start(now);
+          osc.stop(now + 0.13);
+        } 
+        else if (type === 1) {
+          // Rare: 8-bit double ping arpeggio
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'square'; // Chunky vintage bite
+          osc.frequency.setValueAtTime(523.25, now); // C5
+          osc.frequency.setValueAtTime(659.25, now + 0.06); // E5
+          
+          gain.gain.setValueAtTime(0.2, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+          
+          osc.connect(gain);
+          gain.connect(this.masterVolume);
+          osc.start(now);
+          osc.stop(now + 0.16);
+        } 
+        else {
+          // Exclusive: Epic major arpeggio synth chord sweep!
+          const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6 (C Major chord sweep)
+          notes.forEach((freq, idx) => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            const filter = this.ctx.createBiquadFilter();
+            
+            osc.type = 'sawtooth';
+            filter.type = 'lowpass';
+            filter.frequency.value = 1400;
 
-        filter.type = 'lowpass';
-        filter.frequency.value = 1500;
+            const startTime = now + idx * 0.04;
+            osc.frequency.setValueAtTime(freq, startTime);
+            gain.gain.setValueAtTime(0, now);
+            gain.gain.setValueAtTime(0.25, startTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.18);
 
-        gain.gain.setValueAtTime(0.6, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
-
-        osc.connect(filter);
-        filter.connect(gain);
-        gain.connect(this.masterVolume);
-
-        osc.start(now);
-        osc.stop(now + 0.13);
+            osc.connect(filter);
+            filter.connect(gain);
+            gain.connect(this.masterVolume);
+            
+            osc.start(startTime);
+            osc.stop(startTime + 0.20);
+          });
+        }
       }
 
-      // --- SEQUENCER LOOP / CLOCK ---
+      // --- SEQUENCER CLOCK ---
       scheduler() {
         if (!this.isPlayingMusic) return;
 
@@ -785,7 +940,6 @@
           this.advanceStep();
         }
         
-        // Loop scheduler every 25ms
         this.schedulerTimerId = setTimeout(() => this.scheduler(), this.lookahead);
       }
 
@@ -795,10 +949,11 @@
         this.nextNoteTime += secondsPerStep;
 
         this.currentStep = (this.currentStep + 1) % 16;
+        this.globalStep = (this.globalStep + 1) % 64; // Melody loops every 4 measures (64 steps)
       }
 
       scheduleNextStep(step, time) {
-        // Frequencies for our Retro Bassline: A Minor -> F Major -> G Major -> E Minor
+        // Frequencies: A minor -> F major -> G major -> E minor
         const scale = {
           A: 110.00,  // A2
           F: 87.31,   // F2
@@ -808,26 +963,23 @@
 
         const chordPads = {
           Am: [220, 261.63, 329.63], // A3, C4, E4
-          F:  [174.61, 220, 261.63], // F3, A3, C4
-          G:  [196, 246.94, 293.66], // G3, B3, D4
-          Em: [164.81, 196, 246.94]  // E3, G3, B3
+          F:  [174.61, 220, 261.63],
+          G:  [196, 246.94, 293.66],
+          Em: [164.81, 196, 246.94]
         };
 
         let activeRoot = scale.A;
         let activePad = chordPads.Am;
 
-        // Sequence structure (4 bars loop: 64 steps total, or 16 steps looped with shifting root note)
-        // Shifting chord based on system time loop
-        const secondsPerChordLoop = (60.0 / this.tempo) * 4; // 4 Beats per chord
-        const currentMusicTime = this.ctx.currentTime % (secondsPerChordLoop * 4);
-
-        if (currentMusicTime < secondsPerChordLoop) {
+        // Shift root scale chord loop every measure (16 steps)
+        const currentMeasure = Math.floor(this.globalStep / 16);
+        if (currentMeasure === 0) {
           activeRoot = scale.A;
           activePad = chordPads.Am;
-        } else if (currentMusicTime < secondsPerChordLoop * 2) {
+        } else if (currentMeasure === 1) {
           activeRoot = scale.F;
           activePad = chordPads.F;
-        } else if (currentMusicTime < secondsPerChordLoop * 3) {
+        } else if (currentMeasure === 2) {
           activeRoot = scale.G;
           activePad = chordPads.G;
         } else {
@@ -835,31 +987,56 @@
           activePad = chordPads.Em;
         }
 
-        // Bass Rhythm: Classic Driving Eighth Notes (Moroder Bass)
-        // Bass plays on every even step (16th notes, so plays on 0, 2, 4, 6...)
         const stepDuration = (60.0 / this.tempo) / 4;
-        if (step % 2 === 0) {
-          // Alternating roots and octaves
-          const isOctave = (step % 4 === 2);
+
+        // --- 1. SYNCAPATED DRIVING BASSLINE ---
+        // A highly rhythmic, driving off-beat syncopation gallop pattern
+        const bassRhythm = [0, 2, 3, 4, 6, 8, 10, 11, 12, 14];
+        if (bassRhythm.includes(step)) {
+          const isOctave = (step === 3 || step === 11);
           const freq = isOctave ? activeRoot * 2 : activeRoot;
           this.playBass(freq, time, stepDuration * 0.95);
         }
 
-        // Drums Rhythm: Classic 4/4 Beat
-        // Kick on beats 1 and 3 (Steps 0 and 8)
-        if (step === 0 || step === 8) {
+        // --- 2. DRIVING DRUMS TRACK ---
+        // Syncopated Kick Drum: Beats 1, 1-and-a-half (offbeat syncopation), 3, 3-and-a-half
+        if (step === 0 || step === 3 || step === 8 || step === 11) {
           this.playKick(time);
         }
         
-        // Snare on beats 2 and 4 (Steps 4 and 12)
+        // Snare on Beats 2 & 4 (Steps 4 and 12)
         if (step === 4 || step === 12) {
           this.playSnare(time);
         }
 
-        // Chords Pad: trigger a warm synth wash on step 0
+        // Hi-Hat ticks on offbeats to provide acceleration feel
+        if (step === 2 || step === 6 || step === 10 || step === 14) {
+          this.playHihat(time);
+        }
+
+        // --- 3. AMBIENT CHORD WASH ---
         if (step === 0) {
-          const chordDuration = secondsPerChordLoop;
+          const chordDuration = (60.0 / this.tempo) * 4; // 1 whole measure
           this.playPad(activePad, time, chordDuration * 0.98);
+        }
+
+        // --- 4. RETRO LEAD MELODY ---
+        // A catchy, syncopated 80s lead hooks sequence (64 steps loop)
+        const melody = [
+          // Bar 1 (A Minor hook)
+          659.25, 0, 0, 783.99, 0, 880.00, 0, 0, 659.25, 0, 587.33, 0, 659.25, 0, 0, 0,
+          // Bar 2 (Shifting up to high C octave)
+          659.25, 0, 0, 783.99, 0, 880.00, 0, 0, 1046.50, 0, 987.77, 0, 880.00, 0, 0, 0,
+          // Bar 3 (F major hook)
+          587.33, 0, 0, 698.46, 0, 783.99, 0, 0, 587.33, 0, 523.25, 0, 587.33, 0, 0, 0,
+          // Bar 4 (G major resolving to Em/Am)
+          659.25, 0, 587.33, 0, 523.25, 0, 0, 0, 493.88, 0, 440.00, 0, 493.88, 0, 440.00, 0
+        ];
+
+        const targetFreq = melody[this.globalStep];
+        if (targetFreq > 0) {
+          // Play notes with slight legato overlay
+          this.playLead(targetFreq, time, stepDuration * 1.8);
         }
       }
     }
@@ -887,18 +1064,29 @@
 
     // Game states
     let snake = [];
-    let food = { x: 0, y: 0, color: '#00ffff', type: 0 };
+    let food = { x: 0, y: 0, type: 0, color: '#00ffff', scoreValue: 100, growthValue: 1, name: 'CYBER-PULSE' };
+    
+    // Direction vectors
     let dx = 1;
     let dy = 0;
-    let nextDx = 1;
-    let nextDy = 0;
+    
+    // Command input queue to guarantee rapid key entries aren't lost
+    let inputQueue = [];
+
     let score = 0;
     let highScore = localStorage.getItem('snake_highscore') || 0;
     let gameLoopInterval = null;
-    let baseSpeed = 130; // Milliseconds per tick
+    let baseSpeed = 135; // Milliseconds per tick
     let currentSpeed = baseSpeed;
     let gameActive = false;
+    
+    // Segment growth accumulation
+    let pendingGrowth = 0;
+
+    // Visual particles and toasts
     let particles = [];
+    let alertText = "";
+    let alertTimer = 0;
 
     // Set initial High Score display
     highScoreVal.textContent = String(highScore).padStart(4, '0');
@@ -912,8 +1100,8 @@
       ];
       dx = 1;
       dy = 0;
-      nextDx = 1;
-      nextDy = 0;
+      inputQueue = [];
+      pendingGrowth = 0;
     }
 
     // Spawns retro food item ensuring it doesn't overlap the snake
@@ -934,31 +1122,61 @@
         }
       }
 
-      // 80s Cyberpunk Neon Palettes for food types
-      const foodColors = ['#00ffff', '#ffe600', '#bd00ff', '#00ff66'];
-      const randomType = Math.floor(Math.random() * foodColors.length);
+      // Choose Food Type based on probability distribution
+      // 70% Common (0.0 to 0.7)
+      // 20% Rare (0.7 to 0.9)
+      // 10% Exclusive (0.9 to 1.0)
+      const randVal = Math.random();
+      let type = 0;
+      let color = '#00ffff';
+      let scoreValue = 100;
+      let growthValue = 1;
+      let name = 'CYBER-PULSE';
+
+      if (randVal >= 0.90) {
+        type = 2; // Exclusive
+        color = '#ff007f'; // Glowing pink
+        scoreValue = 500;
+        growthValue = 3; // Grows by 3 elements!
+        name = 'PLASMA-CORE';
+        
+        alertText = "ALERT: PLASMA-CORE DETECTED (+500)";
+        alertTimer = 75; // duration in ticks
+      } else if (randVal >= 0.70) {
+        type = 1; // Rare
+        color = '#ffe600'; // Glowing yellow
+        scoreValue = 250;
+        growthValue = 2; // Grows by 2 elements!
+        name = 'WARNING: GOLD-GLITCH INBOUND (+250)';
+        
+        alertText = "WARNING: GOLD-GLITCH LOCATED (+250)";
+        alertTimer = 75;
+      }
 
       food = {
         x: rx,
         y: ry,
-        color: foodColors[randomType],
-        type: randomType
+        type: type,
+        color: color,
+        scoreValue: scoreValue,
+        growthValue: growthValue,
+        name: name
       };
     }
 
-    // Particle Explosion for consumption impact (micro-animation)
+    // Particle Explosion for consumption impact
     class Particle {
-      constructor(x, y, color) {
+      constructor(x, y, color, speedMult = 1.0) {
         this.x = x * GRID_SIZE + GRID_SIZE / 2;
         this.y = y * GRID_SIZE + GRID_SIZE / 2;
         this.color = color;
         this.radius = Math.random() * 3 + 1;
         const angle = Math.random() * Math.PI * 2;
-        const speed = Math.random() * 4 + 2;
+        const speed = (Math.random() * 4.5 + 2) * speedMult;
         this.vx = Math.cos(angle) * speed;
         this.vy = Math.sin(angle) * speed;
         this.alpha = 1.0;
-        this.decay = Math.random() * 0.05 + 0.03;
+        this.decay = Math.random() * 0.035 + 0.02; // Slower fade for dramatic effects
       }
 
       update() {
@@ -973,16 +1191,18 @@
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
         ctx.fillStyle = this.color;
-        ctx.shadowBlur = 10;
+        ctx.shadowBlur = 12;
         ctx.shadowColor = this.color;
         ctx.fill();
         ctx.restore();
       }
     }
 
-    function createExplosion(x, y, color) {
-      for (let i = 0; i < 15; i++) {
-        particles.push(new Particle(x, y, color));
+    function createExplosion(x, y, color, count) {
+      // Speed up particles depending on rarity
+      const speedMultiplier = food.type === 0 ? 1.0 : food.type === 1 ? 1.35 : 1.8;
+      for (let i = 0; i < count; i++) {
+        particles.push(new Particle(x, y, color, speedMultiplier));
       }
     }
 
@@ -990,7 +1210,7 @@
     let frameCount = 0;
     
     function drawGame() {
-      // 1. Screen Refresh - Semi-transparent clears create phosphor ghosting/motion blur trail!
+      // 1. Screen Refresh - Ghosting trail
       ctx.fillStyle = 'rgba(13, 2, 17, 0.28)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -998,20 +1218,18 @@
       ctx.strokeStyle = 'rgba(189, 0, 255, 0.06)';
       ctx.lineWidth = 1;
       for (let i = 0; i <= CELL_COUNT; i++) {
-        // Vertical lines
         ctx.beginPath();
         ctx.moveTo(i * GRID_SIZE, 0);
         ctx.lineTo(i * GRID_SIZE, canvas.height);
         ctx.stroke();
         
-        // Horizontal lines
         ctx.beginPath();
         ctx.moveTo(0, i * GRID_SIZE);
         ctx.lineTo(canvas.width, i * GRID_SIZE);
         ctx.stroke();
       }
 
-      // 3. Update & Draw explosion particles
+      // 3. Draw explosion particles
       particles = particles.filter(p => p.alpha > 0);
       particles.forEach(p => {
         p.update();
@@ -1021,7 +1239,7 @@
       // 4. Draw Snake
       snake.forEach((segment, index) => {
         const isHead = index === 0;
-        const sizeMultiplier = isHead ? 1.0 : Math.max(0.6, 1.0 - (index / snake.length) * 0.35); // Tapered body
+        const sizeMultiplier = isHead ? 1.0 : Math.max(0.65, 1.0 - (index / snake.length) * 0.35); // Tapered body
         const size = GRID_SIZE * sizeMultiplier;
         const offset = (GRID_SIZE - size) / 2;
         
@@ -1032,13 +1250,12 @@
           ctx.shadowBlur = 15;
           ctx.shadowColor = '#ff007f';
         } else {
-          // Shifting body colors (Neon magenta/purple gradient effect)
+          // Shifting purple/magenta gradient
           ctx.fillStyle = `hsl(${290 + (index * 3) % 40}, 100%, 50%)`;
           ctx.shadowBlur = 8;
           ctx.shadowColor = '#bd00ff';
         }
 
-        // Draw rounded box for segment
         const x = segment.x * GRID_SIZE + offset;
         const y = segment.y * GRID_SIZE + offset;
         
@@ -1046,26 +1263,25 @@
         ctx.roundRect(x, y, size, size, isHead ? 6 : 4);
         ctx.fill();
 
-        // Draw retro glowing eyes on head facing direction of travel
+        // Glowing yellow eyes facing heading
         if (isHead) {
-          ctx.fillStyle = '#ffe600'; // Neon yellow glowing eyes
+          ctx.fillStyle = '#ffe600';
           ctx.shadowBlur = 5;
           ctx.shadowColor = '#ffe600';
           
           let eyeSize = 3;
           let eyeOffset = 6;
           
-          // Draw left and right eyes based on current vector
-          if (dx === 1) { // Moving Right
+          if (dx === 1) {
             ctx.fillRect(x + size - 8, y + eyeOffset, eyeSize, eyeSize);
             ctx.fillRect(x + size - 8, y + size - eyeOffset - eyeSize, eyeSize, eyeSize);
-          } else if (dx === -1) { // Moving Left
+          } else if (dx === -1) {
             ctx.fillRect(x + 5, y + eyeOffset, eyeSize, eyeSize);
             ctx.fillRect(x + 5, y + size - eyeOffset - eyeSize, eyeSize, eyeSize);
-          } else if (dy === 1) { // Moving Down
+          } else if (dy === 1) {
             ctx.fillRect(x + eyeOffset, y + size - 8, eyeSize, eyeSize);
             ctx.fillRect(x + size - eyeOffset - eyeSize, y + size - 8, eyeSize, eyeSize);
-          } else if (dy === -1) { // Moving Up
+          } else if (dy === -1) {
             ctx.fillRect(x + eyeOffset, y + 5, eyeSize, eyeSize);
             ctx.fillRect(x + size - eyeOffset - eyeSize, y + 5, eyeSize, eyeSize);
           }
@@ -1074,46 +1290,133 @@
         ctx.restore();
       });
 
-      // 5. Draw Food (Pulsing Neon Diamond / Target)
-      ctx.save();
-      ctx.fillStyle = food.color;
-      ctx.shadowBlur = 18;
-      ctx.shadowColor = food.color;
-      
-      // Pulse animation logic
+      // 5. Draw Food (Tier Specific Visual Styling)
       frameCount++;
-      const pulse = 1.0 + Math.sin(frameCount * 0.15) * 0.15;
+      const pulse = 1.0 + Math.sin(frameCount * 0.16) * 0.15;
       const fSize = (GRID_SIZE - 6) * pulse;
-      const fOffset = (GRID_SIZE - fSize) / 2;
       
       const fx = food.x * GRID_SIZE + GRID_SIZE / 2;
       const fy = food.y * GRID_SIZE + GRID_SIZE / 2;
 
-      // Draw Diamond
-      ctx.beginPath();
-      ctx.moveTo(fx, fy - fSize / 2);
-      ctx.lineTo(fx + fSize / 2, fy);
-      ctx.lineTo(fx, fy + fSize / 2);
-      ctx.lineTo(fx - fSize / 2, fy);
-      ctx.closePath();
-      ctx.fill();
+      ctx.save();
+      ctx.shadowBlur = 18 + Math.sin(frameCount * 0.15) * 4;
+      ctx.shadowColor = food.color;
+      ctx.fillStyle = food.color;
 
-      // Inner glowing core
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(fx, fy, 2, 0, Math.PI * 2);
-      ctx.fill();
+      if (food.type === 0) {
+        // --- COMMON: Rotating Diamond ---
+        ctx.translate(fx, fy);
+        ctx.rotate(frameCount * 0.04);
+        ctx.beginPath();
+        ctx.moveTo(0, -fSize / 2);
+        ctx.lineTo(fSize / 2, 0);
+        ctx.lineTo(0, fSize / 2);
+        ctx.lineTo(-fSize / 2, 0);
+        ctx.closePath();
+        ctx.fill();
 
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(0, 0, 2, 0, Math.PI * 2);
+        ctx.fill();
+      } 
+      else if (food.type === 1) {
+        // --- RARE: Pulsing Retro Target Star ---
+        ctx.translate(fx, fy);
+        ctx.rotate(-frameCount * 0.03);
+        
+        ctx.beginPath();
+        for (let i = 0; i < 8; i++) {
+          const angle = (i * Math.PI) / 4;
+          const r = i % 2 === 0 ? fSize / 2 : fSize / 4;
+          const sx = Math.cos(angle) * r;
+          const sy = Math.sin(angle) * r;
+          if (i === 0) ctx.moveTo(sx, sy);
+          else ctx.lineTo(sx, sy);
+        }
+        ctx.closePath();
+        ctx.fill();
+
+        // Glowing wire ring
+        ctx.strokeStyle = food.color;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(0, 0, fSize / 1.7, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(0, 0, 3, 0, Math.PI * 2);
+        ctx.fill();
+      } 
+      else {
+        // --- EXCLUSIVE: High-Energy Pulsating Plasma Core ---
+        ctx.translate(fx, fy);
+        ctx.rotate(frameCount * 0.08);
+
+        // Core
+        ctx.beginPath();
+        ctx.arc(0, 0, fSize / 3.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Orbiting rings
+        ctx.strokeStyle = food.color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, fSize / 2, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(0, 0, fSize / 1.4, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Sub-orbit satellites
+        ctx.fillStyle = food.color;
+        for (let i = 0; i < 4; i++) {
+          const angle = (i * Math.PI) / 2 + frameCount * 0.05;
+          const nx = Math.cos(angle) * (fSize / 1.4);
+          const ny = Math.sin(angle) * (fSize / 1.4);
+          ctx.beginPath();
+          ctx.arc(nx, ny, 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
       ctx.restore();
+
+      // 6. Draw System Log Spawning Notifications
+      if (alertTimer > 0) {
+        alertTimer--;
+        ctx.save();
+        ctx.font = '8px "Press Start 2P"';
+        ctx.fillStyle = food.color;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = food.color;
+        ctx.textAlign = 'center';
+        
+        // Dynamic terminal glitch alpha fade
+        if (alertTimer < 20) {
+          ctx.globalAlpha = alertTimer / 20;
+        } else {
+          ctx.globalAlpha = 0.85 + Math.sin(frameCount * 0.4) * 0.15;
+        }
+        
+        ctx.fillText(alertText, canvas.width / 2, canvas.height - 32);
+        ctx.restore();
+      }
     }
 
     // --- GAME PHYSICS TICK ---
     function updatePhysics() {
-      // 1. Commit directional input changes at start of tick
-      dx = nextDx;
-      dy = nextDy;
+      // 1. Process queued keyboard steering command (Prevents lost keystrokes)
+      if (inputQueue.length > 0) {
+        const nextMove = inputQueue.shift();
+        dx = nextMove.dx;
+        dy = nextMove.dy;
+      }
 
-      // 2. Compute new head coordinates
+      // 2. Compute next head coordinates
       const head = { x: snake[0].x + dx, y: snake[0].y + dy };
 
       // 3. Wall Collision check
@@ -1122,7 +1425,7 @@
         return;
       }
 
-      // 4. Tail Collision check (self-collision)
+      // 4. Tail Collision check
       for (let i = 0; i < snake.length; i++) {
         if (snake[i].x === head.x && snake[i].y === head.y) {
           handleGameOver();
@@ -1130,54 +1433,58 @@
         }
       }
 
-      // 5. Insert head segment to front of snake array
+      // 5. Place head
       snake.unshift(head);
 
-      // 6. Food Eating check
+      // 6. Eating check
       if (head.x === food.x && head.y === food.y) {
-        // Trigger synthetic sound effect
-        audio.playEatSFX();
+        // Play specific SFX Tier
+        audio.playEatSFX(food.type);
         
-        // Spawn hit impact particles
-        createExplosion(food.x, food.y, food.color);
+        // Massive custom explosion particle burst
+        const particleCount = food.type === 0 ? 12 : food.type === 1 ? 25 : 45;
+        createExplosion(food.x, food.y, food.color, particleCount);
         
-        // Score scaling increments based on length
-        score += 100;
+        // Increment Score
+        score += food.scoreValue;
         scoreVal.textContent = String(score).padStart(4, '0');
         
-        // Update High Score local storage if record broken
+        // High Score
         if (score > highScore) {
           highScore = score;
           highScoreVal.textContent = String(highScore).padStart(4, '0');
           localStorage.setItem('snake_highscore', highScore);
         }
 
-        // Spawn new target food
+        // Setup multi-segment pending growth ticks
+        pendingGrowth += food.growthValue;
+
         spawnFood();
 
-        // Speed ramp scaling logic: increase speed as snake gets longer
-        // Speed up by 2ms for every piece of food, capped at 60ms tick rate
-        const speedReduction = Math.floor(score / 100) * 2;
-        currentSpeed = Math.max(60, baseSpeed - speedReduction);
+        // Speed ramp scaling
+        const speedReduction = Math.floor(score / 100) * 1.5;
+        currentSpeed = Math.max(55, baseSpeed - speedReduction);
         
-        // Reset ticker interval to match the new speed tier
         clearInterval(gameLoopInterval);
         gameLoopInterval = setInterval(gameStep, currentSpeed);
       } else {
-        // Remove trailing tail segment if food not consumed (standard slide motion)
-        snake.pop();
+        // Process standard segment growth decay ticks
+        if (pendingGrowth > 0) {
+          pendingGrowth--;
+        } else {
+          snake.pop(); // Standard slide motion
+        }
       }
     }
 
-    // Unified step iteration
+    // Unified step execution
     function gameStep() {
       updatePhysics();
       drawGame();
     }
 
-    // --- INPUT PROCESSING (Keyboard Steering) ---
+    // --- INPUT PROCESSING (Input Queuing Keyboard Steering) ---
     document.addEventListener('keydown', e => {
-      // Prevent browser default arrow navigation keys when playing
       const arrows = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '];
       if (arrows.includes(e.key) && gameActive) {
         e.preventDefault();
@@ -1185,59 +1492,52 @@
 
       if (!gameActive) return;
 
+      // Extract last targeted move context (either tail of queue, or head active direction)
+      const lastMove = inputQueue.length > 0 ? inputQueue[inputQueue.length - 1] : { dx, dy };
+      let newMove = null;
+
       switch(e.key.toLowerCase()) {
-        // Steering up
         case 'arrowup':
         case 'w':
-          if (dy !== 1) { // Prevent straight reversal
-            nextDx = 0;
-            nextDy = -1;
-          }
+          if (lastMove.dy !== 1) newMove = { dx: 0, dy: -1 };
           break;
-        // Steering down
         case 'arrowdown':
         case 's':
-          if (dy !== -1) {
-            nextDx = 0;
-            nextDy = 1;
-          }
+          if (lastMove.dy !== -1) newMove = { dx: 0, dy: 1 };
           break;
-        // Steering left
         case 'arrowleft':
         case 'a':
-          if (dx !== 1) {
-            nextDx = -1;
-            nextDy = 0;
-          }
+          if (lastMove.dx !== 1) newMove = { dx: -1, dy: 0 };
           break;
-        // Steering right
         case 'arrowright':
         case 'd':
-          if (dx !== -1) {
-            nextDx = 1;
-            nextDy = 0;
-          }
+          if (lastMove.dx !== -1) newMove = { dx: 1, dy: 0 };
           break;
+      }
+
+      if (newMove) {
+        // Only queue up to 2 frames ahead to keep controls extremely snappy and responsive
+        if (inputQueue.length < 2) {
+          inputQueue.push(newMove);
+        }
       }
     });
 
     // --- GAME CONTROL SYSTEM ---
     function initializeGame() {
-      // Initial state config
       score = 0;
       currentSpeed = baseSpeed;
       scoreVal.textContent = '0000';
       particles = [];
+      alertTimer = 0;
+      alertText = "";
 
       spawnSnake();
       spawnFood();
       
-      // Start audio synth engine
       audio.startMusic();
       
       gameActive = true;
-      
-      // Run drawing loops and physics intervals
       drawGame();
       
       if (gameLoopInterval) clearInterval(gameLoopInterval);
@@ -1248,32 +1548,28 @@
       gameActive = false;
       clearInterval(gameLoopInterval);
       
-      // Halt synthwave track
+      // Stop sequencer
       audio.stopMusic();
 
-      // Populate scoreboard stats
+      // Set score stats
       finalScoreVal.textContent = String(score).padStart(4, '0');
       bestAttemptVal.textContent = String(highScore).padStart(4, '0');
       
-      // Trigger Gameover curtain
       gameOverScreen.classList.remove('hidden');
     }
 
     // --- BUTTON EVENT LISTENERS ---
 
-    // 1. Initial click to start game context
     startBtn.addEventListener('click', () => {
       startScreen.classList.add('hidden');
       initializeGame();
     });
 
-    // 2. Play again reload action
     restartBtn.addEventListener('click', () => {
       gameOverScreen.classList.add('hidden');
       initializeGame();
     });
 
-    // 3. Audio hardware mute toggle control
     let audioState = true;
     audioToggle.addEventListener('click', () => {
       audioState = !audioState;
@@ -1281,7 +1577,6 @@
         audioToggle.textContent = 'MUSIC: ON';
         audioToggle.classList.remove('muted');
         audio.setMute(false);
-        // If game is active, ensure music is looping
         if (gameActive) {
           audio.startMusic();
         }
@@ -1292,7 +1587,6 @@
       }
     });
 
-    // Draw grid background initially on load for background visual beauty
     window.onload = () => {
       drawGame();
     };
