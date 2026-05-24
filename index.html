@@ -1040,31 +1040,36 @@
       }
 
       // 8. Soaring Space Counter-Melody Synth (Sine voice flying high above)
-      playHighLead(freq, time, duration) {
+      playHighLead(freq, time, duration, isStaccato = false) {
         if (!this.ctx || this.isMuted) return;
 
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
         const filter = this.ctx.createBiquadFilter();
 
-        osc.type = 'sine'; 
+        osc.type = isStaccato ? 'triangle' : 'sine'; 
         osc.frequency.setValueAtTime(freq, time);
 
         const lfo = this.ctx.createOscillator();
         const lfoGain = this.ctx.createGain();
-        lfo.frequency.value = 5.5; 
-        lfoGain.gain.value = 5.0; 
+        lfo.frequency.value = isStaccato ? 8.0 : 5.5; 
+        lfoGain.gain.value = isStaccato ? 12.0 : 5.0; 
         
         lfo.connect(lfoGain);
         lfoGain.connect(osc.frequency);
 
         filter.type = 'lowpass';
-        filter.frequency.value = 1200;
+        filter.frequency.value = isStaccato ? 3000 : 1200;
 
         gain.gain.setValueAtTime(0, time);
-        gain.gain.linearRampToValueAtTime(0.065, time + 0.40); 
-        gain.gain.setValueAtTime(0.065, time + duration - 0.40);
-        gain.gain.linearRampToValueAtTime(0.001, time + duration); 
+        if (isStaccato) {
+          gain.gain.linearRampToValueAtTime(0.06, time + 0.01); 
+          gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+        } else {
+          gain.gain.linearRampToValueAtTime(0.065, time + 0.40); 
+          gain.gain.setValueAtTime(0.065, time + duration - 0.40);
+          gain.gain.linearRampToValueAtTime(0.001, time + duration); 
+        }
 
         osc.connect(filter);
         filter.connect(gain);
@@ -1495,9 +1500,17 @@
           const activePattern = this.highMelodyPatterns[this.currentPatternIndex];
           const highFreq = activePattern[this.globalStep];
           if (highFreq > 0) {
-            const noteSteps = (this.globalStep === 0 || this.globalStep === 32) ? 16 : 8;
-            const noteDuration = stepDuration * noteSteps;
-            this.playHighLead(highFreq, time, noteDuration * 0.98);
+            const isStage5 = (this.globalLoopCount >= 18 && this.globalLoopCount < 22);
+            if (isStage5) {
+              const noteDuration = stepDuration * 0.45;
+              this.playHighLead(highFreq, time, noteDuration, true);
+              // Echo pulse (delay effect) to fit the "All hope is lost" dramatic theme!
+              this.playHighLead(highFreq, time + stepDuration * 0.5, noteDuration * 0.7, true);
+            } else {
+              const noteSteps = (this.globalStep === 0 || this.globalStep === 32) ? 16 : 8;
+              const noteDuration = stepDuration * noteSteps;
+              this.playHighLead(highFreq, time, noteDuration * 0.98, false);
+            }
           }
         }
       }
