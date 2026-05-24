@@ -969,13 +969,18 @@
           osc.frequency.setValueAtTime(freq, time);
 
           filter.type = 'lowpass';
-          filter.frequency.setValueAtTime(isStage5 ? 850 : 500, time); // slightly brighter for short chords
+          filter.frequency.setValueAtTime(globalLoopCount >= 17 ? 680 : (isStage5 ? 850 : 500), time); // space lowpass setting
 
           gain.gain.setValueAtTime(0, time);
           if (isStage5) {
             // Short chord pad: fade in quickly, hold, and fade out before 1 second
             gain.gain.linearRampToValueAtTime(0.08, time + 0.12); 
             gain.gain.setValueAtTime(0.08, time + duration - 0.15);
+            gain.gain.linearRampToValueAtTime(0.001, time + duration);
+          } else if (globalLoopCount >= 17) {
+            // Stage 9: Slow-attack, long-decay space drone (0.9s attack)
+            gain.gain.linearRampToValueAtTime(0.085, time + 0.90);
+            gain.gain.setValueAtTime(0.085, time + duration - 0.35);
             gain.gain.linearRampToValueAtTime(0.001, time + duration);
           } else {
             gain.gain.linearRampToValueAtTime(0.1, time + 0.5); 
@@ -1017,7 +1022,7 @@
 
         gain.gain.setValueAtTime(0, time);
         
-        const isStage4 = (this.globalLoopCount >= 8);
+        const isStage4 = (this.globalLoopCount >= 8 && this.globalLoopCount < 17);
         const leadVolume = isStage4 ? 0.042 : (isHighIntensity ? 0.09 : 0.08); // scale down to prevent clipping with waveshaper overdrive
         gain.gain.linearRampToValueAtTime(leadVolume, time + 0.02);
         gain.gain.exponentialRampToValueAtTime(leadVolume * 0.44, time + duration - 0.02);
@@ -1311,6 +1316,28 @@
         });
       }
 
+      // 13. Laser Firing SFX (sawtooth 1400Hz to 120Hz pitch dive)
+      playLaserSFX() {
+        this.init();
+        if (!this.ctx || this.isMuted) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(1400, now);
+        osc.frequency.exponentialRampToValueAtTime(120, now + 0.18);
+        
+        gain.gain.setValueAtTime(0.35, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+        
+        osc.connect(gain);
+        gain.connect(this.masterVolume);
+        
+        osc.start(now);
+        osc.stop(now + 0.20);
+      }
+
       // --- SEQUENCER CLOCK ---
       scheduler() {
         if (!this.isPlayingMusic) return;
@@ -1362,6 +1389,14 @@
           } else if (this.globalLoopCount === 15) {
             alertText = "FATAL ERROR: DEEP SECTOR OVERFLOW // SHARK SWARM";
             alertTimer = 200;
+          } else if (this.globalLoopCount === 17) {
+            alertText = "ALERT: STAGE 9 COSMIC HORIZON // GALAXY DEEP";
+            alertTimer = 200;
+            // Restore bright, open audio filter
+            if (this.ctx && this.underwaterFilter) {
+              this.underwaterFilter.frequency.setValueAtTime(this.underwaterFilter.frequency.value, this.ctx.currentTime);
+              this.underwaterFilter.frequency.exponentialRampToValueAtTime(20000, this.ctx.currentTime + 2.0);
+            }
           }
 
           // Randomize soaring counterpoint tracks, guaranteeing no track repeats > twice consecutively
@@ -1422,7 +1457,8 @@
         const isStage3 = (this.globalLoopCount >= 6 && this.globalLoopCount < 8);
         const isStage4 = (this.globalLoopCount >= 8 && this.globalLoopCount < 10);
         const isStage5 = (this.globalLoopCount >= 10 && this.globalLoopCount < 11);
-        const isStage6 = (this.globalLoopCount >= 11);
+        const isStage6 = (this.globalLoopCount >= 11 && this.globalLoopCount < 17);
+        const isStage9 = (this.globalLoopCount >= 17);
         const isIntensityEngaged = (this.globalLoopCount >= 4); 
 
         // --- 1. SYNCAPATED DRIVING BASSLINE ---
@@ -1440,7 +1476,16 @@
         }
 
         // --- 3. DRIVING DRUMS TRACK ---
-        if (isStage6) {
+        if (isStage9) {
+          // Stage 9: Deep open-space galaxy driving drums
+          if (step === 0 || step === 8) {
+            this.playKick(time);
+          }
+          if (step === 4 || step === 12) {
+            this.playSnare(time, 1.2);
+          }
+        }
+        else if (isStage6) {
           // Stage 6 Submerged Beat: slow-mo heavy half-time industrial drums
           if (step === 0 || step === 8 || step === 10) {
             this.playKick(time);
@@ -1480,7 +1525,12 @@
         }
 
         // Hi-Hat rhythms depending on Stage
-        if (isStage6) {
+        if (isStage9) {
+          // Continuous celestial hi-hats sounding like soft solar wind
+          const volumeMult = 0.35 + Math.sin(step * 0.5) * 0.15;
+          this.playHihat(time, volumeMult, step % 4 === 2);
+        }
+        else if (isStage6) {
           // Slow aquatic ticks on eighth steps
           if (step % 2 === 0) {
             this.playHihat(time, 0.75, false);
@@ -1555,7 +1605,10 @@
         if (targetFreq > 0) {
           this.playLead(targetFreq, time, stepDuration * 1.8, isIntensityEngaged);
           
-          if (this.globalLoopCount >= 10) {
+          if (this.globalLoopCount >= 17) {
+            // Stage 9: Clean celestial soaring lead with clear high chime arpeggios
+            this.playLead(targetFreq * 2, time, stepDuration * 1.4, true);     // High Octave arpeggio echo
+          } else if (this.globalLoopCount >= 10 && this.globalLoopCount < 17) {
             // Stage 5: Ultra-distorted guitar lead layered in massive three-voice power chords (Octave up, octave down, and perfect fifth!)
             this.playLead(targetFreq * 2, time, stepDuration * 1.5, true);     // High Octave
             this.playLead(targetFreq * 1.5, time, stepDuration * 1.6, true);   // Perfect Fifth
@@ -1575,8 +1628,17 @@
           const activePattern = this.highMelodyPatterns[this.currentPatternIndex];
           const highFreq = activePattern[this.globalStep];
           if (highFreq > 0) {
+            const isStage9 = (this.globalLoopCount >= 17);
             const isStage5 = (this.globalLoopCount >= 10 && this.globalLoopCount < 11);
-            if (isStage5) {
+            if (isStage9) {
+              const noteDuration = stepDuration * 0.65;
+              // 1st note: Main chime
+              this.playHighLead(highFreq, time, noteDuration, true);
+              // 2nd note: 1st Echo (space delay at 0.4 steps, shifted up a perfect fifth! freq * 1.5)
+              this.playHighLead(highFreq * 1.5, time + stepDuration * 0.4, noteDuration * 0.7, true);
+              // 3rd note: 2nd Echo (space delay at 0.8 steps, shifted up a perfect fifth! freq * 1.5)
+              this.playHighLead(highFreq * 1.5, time + stepDuration * 0.8, noteDuration * 0.4, true);
+            } else if (isStage5) {
               const noteDuration = stepDuration * 0.45;
               this.playHighLead(highFreq, time, noteDuration, true);
               // Echo pulse (delay effect) to fit the "All hope is lost" dramatic theme!
@@ -1650,6 +1712,21 @@
     // Stage 7 & 8 Shark States
     let sharks = [];
     let sharkGapTimer = 3000;
+
+    // Stage 9 Cosmic Horizon States
+    let underwaterFade = 0.0;
+    let bullets = [];
+    let timeSinceLastShot = 0;
+    let nextLaserCooldown = 3000;
+    let stars = [];
+    for (let i = 0; i < 25; i++) {
+      stars.push({
+        x: Math.random() * 600,
+        y: Math.random() * 600,
+        speed: Math.random() * 0.4 + 0.15,
+        size: Math.random() * 1.5 + 0.5
+      });
+    }
 
     function triggerStage6UnderwaterTransition() {
       if (isTransitioningToStage6) return;
@@ -1820,10 +1897,19 @@
     let frameCount = 0;
     
     function drawGame() {
+      // Update underwater fade factor dynamically
+      if (audio.globalLoopCount >= 17) {
+        underwaterFade = Math.max(0.0, underwaterFade - 0.015);
+      } else if (audio.globalLoopCount >= 11) {
+        underwaterFade = 1.0;
+      } else {
+        underwaterFade = 0.0;
+      }
+
       // Apply real-time visual screen shake synced to sequencer beats in Stage 4, 5, and 6!
       const isStage4 = (audio.globalLoopCount >= 8 && audio.globalLoopCount < 10);
       const isStage5 = (audio.globalLoopCount >= 10 && audio.globalLoopCount < 11);
-      const isStage6 = (audio.globalLoopCount >= 11);
+      const isStage6 = (audio.globalLoopCount >= 11 && audio.globalLoopCount < 17);
       let shakeOffset = { x: 0, y: 0 };
       
       if ((isStage4 || isStage5 || isStage6) && audio.isPlayingMusic) {
@@ -1845,6 +1931,45 @@
       // 1. Screen Refresh - Ghosting trail
       ctx.fillStyle = 'rgba(13, 2, 17, 0.28)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Draw open space celestial galaxy backdrop for Stage 9 (loop count >= 17)
+      if (audio.globalLoopCount >= 17) {
+        const now = Date.now();
+        ctx.save();
+        
+        // Purple nebula
+        let nebulaX1 = 300 + Math.sin(now * 0.0003) * 120;
+        let nebulaY1 = 300 + Math.cos(now * 0.0002) * 120;
+        let grad1 = ctx.createRadialGradient(nebulaX1, nebulaY1, 10, nebulaX1, nebulaY1, 280);
+        grad1.addColorStop(0, 'rgba(189, 0, 255, 0.18)'); // soft violet glow
+        grad1.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = grad1;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Cyan nebula
+        let nebulaX2 = 300 + Math.cos(now * 0.00025) * 140;
+        let nebulaY2 = 300 + Math.sin(now * 0.00035) * 100;
+        let grad2 = ctx.createRadialGradient(nebulaX2, nebulaY2, 10, nebulaX2, nebulaY2, 250);
+        grad2.addColorStop(0, 'rgba(0, 225, 255, 0.12)'); // soft cyber-cyan glow
+        grad2.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = grad2;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Scrolling celestial stars (25 stars)
+        ctx.fillStyle = '#ffffff';
+        stars.forEach(star => {
+          star.x -= star.speed;
+          if (star.x < -10) {
+            star.x = canvas.width + 10;
+            star.y = Math.random() * canvas.height;
+          }
+          ctx.beginPath();
+          ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        
+        ctx.restore();
+      }
 
       // Apply screen translation if screen shake is active
       ctx.save();
@@ -2078,6 +2203,34 @@
         ctx.restore();
       });
 
+      // 5.6 Draw Laser Bullets (Stage 9+)
+      if (audio.globalLoopCount >= 17) {
+        bullets.forEach(b => {
+          ctx.save();
+          const bx = b.x * GRID_SIZE + GRID_SIZE / 2;
+          const by = b.y * GRID_SIZE + GRID_SIZE / 2;
+          
+          ctx.shadowBlur = 18;
+          ctx.shadowColor = b.color || '#ffe600';
+          ctx.fillStyle = b.color || '#ffe600';
+          
+          // Draw bullet glowing core
+          ctx.beginPath();
+          ctx.arc(bx, by, 5, 0, Math.PI * 2);
+          ctx.fill();
+          
+          // Draw directional tail/trail
+          ctx.strokeStyle = 'rgba(255, 230, 0, 0.4)';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(bx, by);
+          ctx.lineTo(bx - b.dx * GRID_SIZE * 1.5, by - b.dy * GRID_SIZE * 1.5);
+          ctx.stroke();
+          
+          ctx.restore();
+        });
+      }
+
       // Restore camera translation context
       ctx.restore();
 
@@ -2089,7 +2242,9 @@
         ctx.fillStyle = foods[0] ? foods[0].color : '#00ffff';
         
         // Highlight transition alerts
-        if (alertText.includes("STAGE 6")) {
+        if (alertText.includes("STAGE 9")) {
+          ctx.fillStyle = "#bd00ff"; // Space purple
+        } else if (alertText.includes("STAGE 6")) {
           ctx.fillStyle = "#00e1ff"; // Sub-aquatic cyan
         } else if (alertText.includes("STAGE 5") || alertText.includes("STAGE 4") || alertText.includes("STAGE 3") || alertText.includes("STAGE 2")) {
           ctx.fillStyle = alertText.includes("STAGE 2") ? "#ffe600" : "#ff007f"; 
@@ -2125,17 +2280,17 @@
         }
       }
 
-      // 8. Apply Stage 6 underwater screen submersion and wave ripples
-      if (isUnderwaterMode) {
+      // 8. Apply Stage 6 underwater screen submersion and wave ripples (faded out dynamically in Stage 9)
+      if (underwaterFade > 0.001) {
         // A. Submersion color filter
         ctx.save();
-        ctx.fillStyle = 'rgba(0, 24, 64, 0.32)'; // Submerged teal-blue tint
+        ctx.fillStyle = `rgba(0, 24, 64, ${0.32 * underwaterFade})`; // Submerged teal-blue tint scaled by fade
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.restore();
 
         // B. Vertical water ripple wave distortion
         const waveSpeed = 0.07;
-        const waveAmplitude = 5.5;
+        const waveAmplitude = 5.5 * underwaterFade; // Wave amplitude scaled by fade
         const waveFrequency = 0.045;
         
         for (let y = 0; y < canvas.height; y += 2) {
@@ -2231,7 +2386,10 @@
         }
 
         // Speed ramp scaling
-        if (isUnderwaterMode || audio.globalLoopCount >= 11) {
+        if (audio.globalLoopCount >= 17) {
+          const speedReduction = Math.floor(score / 100) * 2.0;
+          currentSpeed = Math.max(70, 115 - speedReduction); // Fast cosmic space physics speed!
+        } else if (isUnderwaterMode || (audio.globalLoopCount >= 11 && audio.globalLoopCount < 17)) {
           const stage6ScoreDiff = score - stage6StartScore;
           const speedReduction = Math.floor(stage6ScoreDiff / 100) * 4.0; // Slow ramp-up under water
           currentSpeed = Math.max(120, 270 - speedReduction);
@@ -2258,8 +2416,23 @@
         }
       }
 
-      // 7. Stage 7 & 8 Shark Mechanics (Loop 13+)
+      // 7. Stage 7 & 8 & 9 Shark Mechanics (Loop 13+)
       if (audio.globalLoopCount >= 13) {
+        // Transition from underwater physics speed to cosmic physics speed in Stage 9
+        if (audio.globalLoopCount >= 17 && isUnderwaterMode) {
+          isUnderwaterMode = false;
+          const speedReduction = Math.floor(score / 100) * 2.0;
+          currentSpeed = Math.max(70, 115 - speedReduction);
+          
+          clearInterval(gameLoopInterval);
+          gameLoopInterval = setInterval(gameStep, currentSpeed);
+        }
+
+        // Stage 9 constraint: at least one shark visible at all times
+        if (audio.globalLoopCount >= 17 && sharks.length === 0) {
+          sharkGapTimer = 0;
+        }
+
         // A. Update active sharks
         sharks.forEach(s => {
           s.timeLeft -= currentSpeed;
@@ -2345,9 +2518,122 @@
             }
           }
         }
+
+        // C. Stage 9 Laser Mechanics (Shoot bullets, update active bullets)
+        if (audio.globalLoopCount >= 17) {
+          // 1. Firing interval logic
+          timeSinceLastShot += currentSpeed;
+          if (timeSinceLastShot >= nextLaserCooldown && sharks.length > 0) {
+            // Select random active shark
+            const shooter = sharks[Math.floor(Math.random() * sharks.length)];
+            const sHead = snake[0];
+            
+            let bulletDx = 0;
+            let bulletDy = 0;
+            
+            // Check horizontal or vertical alignment with head
+            if (sHead.x === shooter.x || sHead.x === shooter.x + 1) {
+              bulletDx = 0;
+              bulletDy = sHead.y < shooter.y ? -1 : 1;
+            } else if (sHead.y === shooter.y || sHead.y === shooter.y + 1) {
+              bulletDx = sHead.x < shooter.x ? -1 : 1;
+              bulletDy = 0;
+            } else {
+              // Random direction
+              const dirs = [
+                { dx: 1, dy: 0 },
+                { dx: -1, dy: 0 },
+                { dx: 0, dy: 1 },
+                { dx: 0, dy: -1 }
+              ];
+              const d = dirs[Math.floor(Math.random() * dirs.length)];
+              bulletDx = d.dx;
+              bulletDy = d.dy;
+            }
+            
+            // Place bullet outside shooter 2x2 grid area to prevent self-destruction
+            let bx = shooter.x;
+            let by = shooter.y;
+            if (bulletDx === 1) {
+              bx = shooter.x + 2;
+              by = shooter.y + Math.floor(Math.random() * 2);
+            } else if (bulletDx === -1) {
+              bx = shooter.x - 1;
+              by = shooter.y + Math.floor(Math.random() * 2);
+            } else if (bulletDy === 1) {
+              bx = shooter.x + Math.floor(Math.random() * 2);
+              by = shooter.y + 2;
+            } else if (bulletDy === -1) {
+              bx = shooter.x + Math.floor(Math.random() * 2);
+              by = shooter.y - 1;
+            }
+            
+            // Confirm the spawned position is within bounds
+            if (bx >= 0 && bx < CELL_COUNT && by >= 0 && by < CELL_COUNT) {
+              bullets.push({
+                x: bx,
+                y: by,
+                dx: bulletDx,
+                dy: bulletDy,
+                color: '#ffe600'
+              });
+              
+              // Play Sci-Fi arcade laser pew/zap sound effect
+              audio.playLaserSFX();
+            }
+            
+            timeSinceLastShot = 0;
+            nextLaserCooldown = 2000 + Math.random() * 5000; // randomized [2000, 7000] ms
+          }
+          
+          // 2. Advance active bullets at 2 cells per tick, checking collisions at each step
+          let activeBullets = [];
+          for (let b of bullets) {
+            let destroyed = false;
+            for (let step = 0; step < 2; step++) {
+              b.x += b.dx;
+              b.y += b.dy;
+              
+              // Wall collision
+              if (b.x < 0 || b.x >= CELL_COUNT || b.y < 0 || b.y >= CELL_COUNT) {
+                destroyed = true;
+                break;
+              }
+              
+              // Snake head collision (Game Over)
+              if (b.x === snake[0].x && b.y === snake[0].y) {
+                handleGameOver();
+                return;
+              }
+              
+              // Other sharks collision
+              let hitSharkIndex = -1;
+              for (let i = 0; i < sharks.length; i++) {
+                const s = sharks[i];
+                if (s && b.x >= s.x && b.x <= s.x + 1 && b.y >= s.y && b.y <= s.y + 1) {
+                  hitSharkIndex = i;
+                  break;
+                }
+              }
+              
+              if (hitSharkIndex !== -1) {
+                // Destroy shark and bullet
+                createExplosion(sharks[hitSharkIndex].x + 1, sharks[hitSharkIndex].y + 1, '#ff003c', 25, 2);
+                sharks.splice(hitSharkIndex, 1);
+                destroyed = true;
+                break;
+              }
+            }
+            if (!destroyed) {
+              activeBullets.push(b);
+            }
+          }
+          bullets = activeBullets;
+        }
       } else {
         sharks = [];
         sharkGapTimer = 3000; // Reset / Hold gap timer if not in Stage 7+
+        bullets = []; // Clear active bullets
       }
     }
 
@@ -2432,6 +2718,12 @@
       // Clear Stage 7 & 8 shark states
       sharks = [];
       sharkGapTimer = 3000;
+
+      // Clear Stage 9 cosmic states
+      underwaterFade = 0.0;
+      bullets = [];
+      timeSinceLastShot = 0;
+      nextLaserCooldown = 3000;
 
       spawnSnake();
       spawnFood(0);
