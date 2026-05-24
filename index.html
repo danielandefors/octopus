@@ -625,8 +625,23 @@
         this.highMelodyPatterns = [];
         this.currentPatternIndex = 0;
         this.consecutivePatternCount = 1; // Double repeats preventative count
+        
+        // Custom WaveShaper distortion curve for Stage 4 metal power-chord leads
+        this.distortionCurve = this.makeDistortionCurve(75);
 
         this.setupMelodyPatterns();
+      }
+
+      makeDistortionCurve(amount) {
+        const k = typeof amount === 'number' ? amount : 50;
+        const n_samples = 44100;
+        const curve = new Float32Array(n_samples);
+        const deg = Math.PI / 180;
+        for (let i = 0; i < n_samples; ++i) {
+          const x = (i * 2) / n_samples - 1;
+          curve[i] = ((3 + k) * x * 20 * deg) / (Math.PI + k * Math.abs(x));
+        }
+        return curve;
       }
 
       setupMelodyPatterns() {
@@ -717,10 +732,16 @@
         osc.connect(gain);
         gain.connect(this.masterVolume);
         
-        osc.frequency.setValueAtTime(140, time);
-        osc.frequency.exponentialRampToValueAtTime(40, time + 0.12);
+        const isStage4 = (this.globalLoopCount >= 14);
+        const startFreq = isStage4 ? 180 : 140;
+        const endFreq = isStage4 ? 35 : 40;
+        const sweepDuration = isStage4 ? 0.08 : 0.12;
+        const kickVolume = isStage4 ? 1.2 : 1.0;
+
+        osc.frequency.setValueAtTime(startFreq, time);
+        osc.frequency.exponentialRampToValueAtTime(endFreq, time + sweepDuration);
         
-        gain.gain.setValueAtTime(1.0, time);
+        gain.gain.setValueAtTime(kickVolume, time);
         gain.gain.exponentialRampToValueAtTime(0.01, time + 0.16);
         
         osc.start(time);
@@ -728,11 +749,16 @@
       }
 
       // 2. Synth Snare Drum (White Noise through Bandpass Filter)
-      playSnare(time) {
+      playSnare(time, volumeMultiplier = 1.0) {
         if (!this.ctx || this.isMuted) return;
 
+        const isStage4 = (this.globalLoopCount >= 14);
+        const noiseDecay = isStage4 ? 0.22 : 0.14;
+        const bandpassFreq = isStage4 ? 900 : 1100;
+        const filterQ = isStage4 ? 1.5 : 2.0;
+
         // Generate white noise buffer
-        const bufferSize = this.ctx.sampleRate * 0.15;
+        const bufferSize = this.ctx.sampleRate * 0.25;
         const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
         const data = buffer.getChannelData(0);
         for (let i = 0; i < bufferSize; i++) {
@@ -742,15 +768,14 @@
         const noiseNode = this.ctx.createBufferSource();
         noiseNode.buffer = buffer;
 
-        // Filter to shape noise
         const filter = this.ctx.createBiquadFilter();
         filter.type = 'bandpass';
-        filter.frequency.value = 1100;
-        filter.Q.value = 2.0;
+        filter.frequency.value = bandpassFreq;
+        filter.Q.value = filterQ;
 
         const gain = this.ctx.createGain();
-        gain.gain.setValueAtTime(0.45, time);
-        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.14);
+        gain.gain.setValueAtTime(0.45 * volumeMultiplier, time);
+        gain.gain.exponentialRampToValueAtTime(0.01, time + noiseDecay);
 
         noiseNode.connect(filter);
         filter.connect(gain);
@@ -761,23 +786,26 @@
         const popGain = this.ctx.createGain();
         pop.type = 'triangle';
         pop.frequency.setValueAtTime(170, time);
-        popGain.gain.setValueAtTime(0.4, time);
+        popGain.gain.setValueAtTime(0.4 * volumeMultiplier, time);
         popGain.gain.exponentialRampToValueAtTime(0.01, time + 0.08);
         
         pop.connect(popGain);
         popGain.connect(this.masterVolume);
 
         noiseNode.start(time);
-        noiseNode.stop(time + 0.14);
+        noiseNode.stop(time + noiseDecay);
         pop.start(time);
         pop.stop(time + 0.09);
       }
 
-      // 3. Hi-Hat Ticks (High-frequency white noise ticks. Supports loudness multiplier)
-      playHihat(time, volumeMultiplier = 1.0) {
+      // 3. Hi-Hat Ticks (High-frequency white noise ticks. Supports open-hat duration)
+      playHihat(time, volumeMultiplier = 1.0, isOpen = false) {
         if (!this.ctx || this.isMuted) return;
 
-        const bufferSize = this.ctx.sampleRate * 0.04;
+        const duration = isOpen ? 0.08 : 0.04;
+        const decayTime = isOpen ? 0.075 : 0.035;
+
+        const bufferSize = this.ctx.sampleRate * duration;
         const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
         const data = buffer.getChannelData(0);
         for (let i = 0; i < bufferSize; i++) {
@@ -789,21 +817,21 @@
 
         const filter = this.ctx.createBiquadFilter();
         filter.type = 'highpass';
-        filter.frequency.value = 8500;
+        filter.frequency.value = isOpen ? 7500 : 8500; // slightly crispier open hat
 
         const gain = this.ctx.createGain();
         gain.gain.setValueAtTime(0.12 * volumeMultiplier, time);
-        gain.gain.exponentialRampToValueAtTime(0.001, time + 0.035);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + decayTime);
 
         noiseNode.connect(filter);
         filter.connect(gain);
         gain.connect(this.masterVolume);
 
         noiseNode.start(time);
-        noiseNode.stop(time + 0.04);
+        noiseNode.stop(time + duration);
       }
 
-      // 4. Driving Bassline (Galloping / Moroder Bass. Supports Stage 2 and 3 sweeps)
+      // 4. Driving Bassline (Galloping Bass. Supports Stage 2, 3, and 4 sweeps)
       playBass(freq, time, duration, globalLoopCount = 0) {
         if (!this.ctx || this.isMuted) return;
 
@@ -818,13 +846,27 @@
         osc2.type = 'triangle';
         osc2.frequency.setValueAtTime(freq / 2, time);
 
-        // Filter sweeps based on progressive Stages (Stage 2 at 6 loops, Stage 3 at 10 loops)
+        // Stage 4 detuned supersaw helper oscillator
+        let osc3 = null;
+        if (globalLoopCount >= 14) {
+          osc3 = this.ctx.createOscillator();
+          osc3.type = 'sawtooth';
+          osc3.frequency.setValueAtTime(freq - 3, time); // detuned chorus sweep
+        }
+
+        // Filter sweeps based on Stage
         let startCutoff = 260;
         let endCutoff = 1100;
+        let filterQ = 1.0;
         
-        if (globalLoopCount >= 10) { // Stage 3 Apex
+        if (globalLoopCount >= 14) { // Stage 4: High Resonant growl chug!
+          startCutoff = 600;
+          endCutoff = 2900;
+          filterQ = 4.2; // Squelchy growl
+        } else if (globalLoopCount >= 10) { // Stage 3 Apex
           startCutoff = 550;
           endCutoff = 2700;
+          filterQ = 1.5;
         } else if (globalLoopCount >= 6) { // Stage 2 High
           startCutoff = 420;
           endCutoff = 2000;
@@ -834,21 +876,31 @@
         filter.frequency.setValueAtTime(startCutoff, time);
         filter.frequency.exponentialRampToValueAtTime(endCutoff, time + 0.05);
         filter.frequency.exponentialRampToValueAtTime(150, time + duration);
+        filter.Q.setValueAtTime(filterQ, time);
 
-        const gainLevel = globalLoopCount >= 10 ? 0.90 : globalLoopCount >= 6 ? 0.82 : 0.75;
+        const gainLevel = globalLoopCount >= 14 ? 0.95 : globalLoopCount >= 10 ? 0.90 : globalLoopCount >= 6 ? 0.82 : 0.75;
         gain.gain.setValueAtTime(gainLevel, time); 
         gain.gain.exponentialRampToValueAtTime(0.01, time + duration);
 
         osc1.connect(filter);
         osc2.connect(filter);
+        if (osc3) {
+          osc3.connect(filter);
+        }
         filter.connect(gain);
         gain.connect(this.masterVolume);
 
         osc1.start(time);
         osc2.start(time);
+        if (osc3) {
+          osc3.start(time);
+        }
         
         osc1.stop(time + duration);
         osc2.stop(time + duration);
+        if (osc3) {
+          osc3.stop(time + duration);
+        }
       }
 
       // 5. Warm, Softer Synth Chords (Warm plucked triangle waves)
@@ -860,7 +912,7 @@
         chordGain.gain.linearRampToValueAtTime(0.08, time + 0.035); 
         chordGain.gain.exponentialRampToValueAtTime(0.001, time + duration);
 
-        // Open up soft chords filter in Stage 3 for brilliant harmony
+        // Open up chords filter cutoff based on stages
         const startCutoff = globalLoopCount >= 10 ? 1200 : 850;
         const endCutoff = globalLoopCount >= 10 ? 550 : 350;
 
@@ -936,8 +988,11 @@
         filter.frequency.exponentialRampToValueAtTime(550, time + duration);
 
         gain.gain.setValueAtTime(0, time);
-        gain.gain.linearRampToValueAtTime(isHighIntensity ? 0.09 : 0.08, time + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.035, time + duration - 0.02);
+        
+        const isStage4 = (this.globalLoopCount >= 14);
+        const leadVolume = isStage4 ? 0.042 : (isHighIntensity ? 0.09 : 0.08); // scale down to prevent clipping with waveshaper overdrive
+        gain.gain.linearRampToValueAtTime(leadVolume, time + 0.02);
+        gain.gain.exponentialRampToValueAtTime(leadVolume * 0.44, time + duration - 0.02);
         gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
 
         osc1.connect(filter);
@@ -947,7 +1002,16 @@
         osc2.connect(sawMix);
         sawMix.connect(filter);
 
-        filter.connect(gain);
+        if (isStage4) {
+          const shaper = this.ctx.createWaveShaper();
+          shaper.curve = this.distortionCurve;
+          shaper.oversample = '4x';
+          filter.connect(shaper);
+          shaper.connect(gain);
+        } else {
+          filter.connect(gain);
+        }
+        
         gain.connect(this.masterVolume);
 
         osc1.start(time);
@@ -1058,7 +1122,7 @@
         }
       }
 
-      // 10. Sad retro crash game over sweep (FIXED: Resolved JS ReferenceError)
+      // 10. Sad retro crash game over sweep (FIXED: Corrected node connection)
       playGameOverSFX() {
         this.init();
         if (!this.ctx || this.isMuted) return;
@@ -1113,7 +1177,7 @@
 
         noise.connect(noiseFilter);
         noiseFilter.connect(noiseGain);
-        noiseGain.connect(this.masterVolume); // FIXED: Corrected 'gain' to 'noiseGain' to prevent ReferenceError!
+        noiseGain.connect(this.masterVolume); // FIXED: Correct connection node
 
         noise.start(now);
         noise.stop(now + 0.45);
@@ -1144,13 +1208,16 @@
         if (this.globalStep === 0 && lastGlobalStep === 63) {
           this.globalLoopCount++; 
           
-          // Trigger Stage warning alerts (Stage 2 at 6 loops, Stage 3 at 10 loops!)
+          // Trigger Stage warning alerts (Stage 2 at 6 loops, Stage 3 at 10 loops, Stage 4 at 14 loops!)
           if (this.globalLoopCount === 6) {
             alertText = "ALERT: STAGE 2 INTENSITY ENGAGED";
             alertTimer = 110;
           } else if (this.globalLoopCount === 10) {
             alertText = "WARNING: STAGE 3 APEX INTENSITY ENGAGED";
-            alertTimer = 130;
+            alertTimer = 120;
+          } else if (this.globalLoopCount === 14) {
+            alertText = "CRITICAL: STAGE 4 APEX CHUG // HEADBANG MODE ENGAGED";
+            alertTimer = 160;
           }
 
           // Randomize soaring counterpoint tracks, guaranteeing no track repeats > twice consecutively
@@ -1206,10 +1273,11 @@
 
         const stepDuration = (60.0 / this.tempo) / 4;
         
-        // Stages logic
+        // Progressive Stages flags
         const isStage2 = (this.globalLoopCount >= 6 && this.globalLoopCount < 10);
-        const isStage3 = (this.globalLoopCount >= 10);
-        const isIntensityEngaged = (this.globalLoopCount >= 6); // Stage 2 or 3
+        const isStage3 = (this.globalLoopCount >= 10 && this.globalLoopCount < 14);
+        const isStage4 = (this.globalLoopCount >= 14);
+        const isIntensityEngaged = (this.globalLoopCount >= 6); 
 
         // --- 1. SYNCAPATED DRIVING BASSLINE ---
         const bassRhythm = [0, 2, 3, 4, 6, 8, 10, 11, 12, 14];
@@ -1226,35 +1294,59 @@
         }
 
         // --- 3. DRIVING DRUMS TRACK ---
-        if (step === 0 || step === 3 || step === 8 || step === 11) {
-          this.playKick(time);
-        }
-        
-        if (step === 4 || step === 12) {
-          this.playSnare(time);
+        // Stage 4 headbanger: Constant heavy kicks + claps Snare
+        if (isStage4) {
+          // Double Kicks on every even beat chug
+          if (step === 0 || step === 2 || step === 4 || step === 6 || step === 8 || step === 10 || step === 12 || step === 14) {
+            this.playKick(time);
+          }
+          // Extra heavy Snares playing syncopated claps on 4, 6, 12, 14!
+          if (step === 4 || step === 6 || step === 12 || step === 14) {
+            this.playSnare(time, 1.4); // louder snare claps
+          }
+        } else {
+          // Normal stages drums
+          if (step === 0 || step === 3 || step === 8 || step === 11) {
+            this.playKick(time);
+          }
+          if (step === 4 || step === 12) {
+            this.playSnare(time, 1.0);
+          }
         }
 
         // Hi-Hat rhythms depending on Stage
-        if (isStage3) {
-          // Stage 3: Relentless sixteenth note chugga-chugga speed chug!
+        if (isStage4) {
+          // Stage 4: continuous 16th note chug, with open hat ticks on offbeats!
+          const isOffbeat = (step === 2 || step === 6 || step === 10 || step === 14);
+          const isDrumBeat = (step === 0 || step === 4 || step === 8 || step === 12);
+          let volumeMult = 0.5;
+          if (isOffbeat) {
+            this.playHihat(time, 1.15, true); // Open Hi-hat!
+          } else {
+            if (isDrumBeat) volumeMult = 0.7;
+            this.playHihat(time, volumeMult, false); // Closed Hi-hat
+          }
+        }
+        else if (isStage3) {
+          // Stage 3: Relentless sixteenth note closed hat roll!
           const isOffbeat = (step === 2 || step === 6 || step === 10 || step === 14);
           const isDrumBeat = (step === 0 || step === 4 || step === 8 || step === 12);
           let volumeMult = 0.45;
           if (isOffbeat) volumeMult = 0.95;
           else if (isDrumBeat) volumeMult = 0.65;
-          this.playHihat(time, volumeMult);
+          this.playHihat(time, volumeMult, false);
         } 
         else if (isStage2) {
           // Stage 2: Constant 8th notes (every even step)
           if (step % 2 === 0) {
             const volumeMult = (step === 2 || step === 6 || step === 10 || step === 14) ? 1.3 : 0.75;
-            this.playHihat(time, volumeMult);
+            this.playHihat(time, volumeMult, false);
           }
         } 
         else {
           // Stage 1: Standard off-beat hats
           if (step === 2 || step === 6 || step === 10 || step === 14) {
-            this.playHihat(time, 1.0);
+            this.playHihat(time, 1.0, false);
           }
         }
 
@@ -1280,8 +1372,12 @@
         if (targetFreq > 0) {
           this.playLead(targetFreq, time, stepDuration * 1.8, isIntensityEngaged);
           
-          // Stage 3: Double lead hook octave layer for screaming analog brightness!
-          if (isStage3) {
+          if (this.globalLoopCount >= 14) {
+            // Stage 4: Massive soaring synthesized metal POWER CHORDS! (Root + Fifth + Octave)
+            this.playLead(targetFreq * 2, time, stepDuration * 1.5, true);   // Octave
+            this.playLead(targetFreq * 1.5, time, stepDuration * 1.6, true); // Perfect Fifth!
+          } else if (this.globalLoopCount >= 10) {
+            // Stage 3: Octave doubling
             this.playLead(targetFreq * 2, time, stepDuration * 1.5, true);
           }
         }
@@ -1341,10 +1437,11 @@
     // Segment growth accumulation
     let pendingGrowth = 0;
 
-    // Visual particles and toasts
+    // Visual particles, shakes and toasts
     let particles = [];
     let alertText = "";
     let alertTimer = 0;
+    let screenShake = 0; // Dynamic audio-visual screen shake!
 
     // Set initial High Score display
     highScoreVal.textContent = String(highScore).padStart(4, '0');
@@ -1465,12 +1562,39 @@
     let frameCount = 0;
     
     function drawGame() {
+      // Apply real-time visual screen shake synced to sequencer beats in Stage 4!
+      const isStage4 = (audio.globalLoopCount >= 14);
+      let shakeOffset = { x: 0, y: 0 };
+      
+      if (isStage4 && audio.isPlayingMusic) {
+        const heavySteps = [0, 4, 6, 8, 12, 14]; // kicks, snares, claps
+        if (heavySteps.includes(audio.currentStep)) {
+          // Shake camera instantly in sync
+          screenShake = Math.max(screenShake, audio.currentStep % 4 === 0 ? 5.5 : 3.8);
+        }
+      }
+      
+      if (screenShake > 0) {
+        shakeOffset.x = (Math.random() - 0.5) * screenShake;
+        shakeOffset.y = (Math.random() - 0.5) * screenShake;
+        screenShake *= 0.82; // rapid decay
+        if (screenShake < 0.1) screenShake = 0;
+      }
+
       // 1. Screen Refresh - Ghosting trail
       ctx.fillStyle = 'rgba(13, 2, 17, 0.28)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+      // Apply screen translation if screen shake is active
+      ctx.save();
+      ctx.translate(shakeOffset.x, shakeOffset.y);
+
       // 2. Draw Retro Glowing Grid lines
-      ctx.strokeStyle = 'rgba(189, 0, 255, 0.06)';
+      let gridAlpha = 0.06;
+      if (isStage4 && audio.isPlayingMusic) {
+        gridAlpha = 0.06 + (screenShake / 5.5) * 0.12; // pulse grid line glow with beat shake
+      }
+      ctx.strokeStyle = `rgba(189, 0, 255, ${gridAlpha})`;
       ctx.lineWidth = 1;
       for (let i = 0; i <= CELL_COUNT; i++) {
         ctx.beginPath();
@@ -1502,12 +1626,12 @@
         
         if (isHead) {
           ctx.fillStyle = '#ff007f'; // Neon pink head
-          ctx.shadowBlur = 15;
+          ctx.shadowBlur = isStage4 ? 24 : 15;
           ctx.shadowColor = '#ff007f';
         } else {
           // Shifting purple/magenta gradient
           ctx.fillStyle = `hsl(${290 + (index * 3) % 40}, 100%, 50%)`;
-          ctx.shadowBlur = 8;
+          ctx.shadowBlur = isStage4 ? 15 : 8;
           ctx.shadowColor = '#bd00ff';
         }
 
@@ -1554,7 +1678,8 @@
       const fy = food.y * GRID_SIZE + GRID_SIZE / 2;
 
       ctx.save();
-      ctx.shadowBlur = 18 + Math.sin(frameCount * 0.15) * 4;
+      const foodGlow = isStage4 ? 28 + Math.sin(frameCount * 0.2) * 8 : 18 + Math.sin(frameCount * 0.15) * 4;
+      ctx.shadowBlur = foodGlow;
       ctx.shadowColor = food.color;
       ctx.fillStyle = food.color;
 
@@ -1640,7 +1765,10 @@
       }
       ctx.restore();
 
-      // 6. Draw System Log Spawning Notifications
+      // Restore camera translation context
+      ctx.restore();
+
+      // 6. Draw System Log Spawning Notifications (Not affected by screen shake)
       if (alertTimer > 0) {
         alertTimer--;
         ctx.save();
@@ -1648,8 +1776,10 @@
         ctx.fillStyle = food.color;
         
         // Highlight transition alerts
-        if (alertText.includes("STAGE 3")) {
+        if (alertText.includes("STAGE 4")) {
           ctx.fillStyle = "#ff007f"; // Red alert pink
+        } else if (alertText.includes("STAGE 3")) {
+          ctx.fillStyle = "#ff007f"; 
         } else if (alertText.includes("STAGE 2")) {
           ctx.fillStyle = "#ffe600"; // Yellow alert gold
         }
@@ -1807,6 +1937,7 @@
       particles = [];
       alertTimer = 0;
       alertText = "";
+      screenShake = 0;
 
       spawnSnake();
       spawnFood();
