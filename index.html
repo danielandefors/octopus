@@ -1338,6 +1338,53 @@
         osc.stop(now + 0.20);
       }
 
+      // 14. Octopus Eating SFX (Pleasing C5-E5-G5-B5 major arpeggio chime)
+      playOctopusEatSFX() {
+        this.init();
+        if (!this.ctx || this.isMuted) return;
+        const now = this.ctx.currentTime;
+        const notes = [523.25, 659.25, 783.99, 987.77];
+        notes.forEach((freq, idx) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now + idx * 0.045);
+          
+          gain.gain.setValueAtTime(0, now);
+          gain.gain.setValueAtTime(0.18, now + idx * 0.045);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.045 + 0.15);
+          
+          osc.connect(gain);
+          gain.connect(this.masterVolume);
+          
+          osc.start(now + idx * 0.045);
+          osc.stop(now + idx * 0.045 + 0.18);
+        });
+      }
+
+      // 15. Retro Bouncy Spring SFX (Pitch sliding upwards)
+      playBounceSFX() {
+        this.init();
+        if (!this.ctx || this.isMuted) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(150, now);
+        osc.frequency.exponentialRampToValueAtTime(580, now + 0.14);
+        
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+        
+        osc.connect(gain);
+        gain.connect(this.masterVolume);
+        
+        osc.start(now);
+        osc.stop(now + 0.15);
+      }
+
       // --- SEQUENCER CLOCK ---
       scheduler() {
         if (!this.isPlayingMusic) return;
@@ -1397,6 +1444,9 @@
               this.underwaterFilter.frequency.setValueAtTime(this.underwaterFilter.frequency.value, this.ctx.currentTime);
               this.underwaterFilter.frequency.exponentialRampToValueAtTime(20000, this.ctx.currentTime + 2.0);
             }
+          } else if (this.globalLoopCount === 20) {
+            alertText = "ALERT: STAGE 10 DEEP SECTOR // CYBER-OCTOPUS DETECTED";
+            alertTimer = 220;
           }
 
           // Randomize soaring counterpoint tracks, guaranteeing no track repeats > twice consecutively
@@ -1721,6 +1771,10 @@
     let stage9StartSpeed = 135;
     let stage9StartScore = 0;
     let stars = [];
+
+    // Stage 10 Cosmic Octopus States
+    let octopus = null;
+    let octopusTickCounter = 0;
     for (let i = 0; i < 25; i++) {
       stars.push({
         x: Math.random() * 600,
@@ -2119,7 +2173,7 @@
           ctx.arc(0, 0, 3, 0, Math.PI * 2);
           ctx.fill();
         } 
-        else {
+        else if (fItem.type === 2) {
           // --- EXCLUSIVE: High-Energy Pulsating Plasma Core ---
           ctx.translate(fx, fy);
           ctx.rotate(frameCount * 0.08);
@@ -2150,6 +2204,53 @@
             const ny = Math.sin(angle) * (fSize / 1.4);
             ctx.beginPath();
             ctx.arc(nx, ny, 2, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+        else {
+          // --- TYPE 3: OCTO-GLITCH (Upgraded Cyber-Food Portal) ---
+          ctx.translate(fx, fy);
+          ctx.rotate(-frameCount * 0.12);
+          
+          // Outer spinning gold star
+          ctx.fillStyle = '#ffe600';
+          ctx.shadowBlur = 30;
+          ctx.shadowColor = '#ffe600';
+          ctx.beginPath();
+          for (let i = 0; i < 6; i++) {
+            const angle = (i * Math.PI) / 3;
+            const r = i % 2 === 0 ? fSize * 0.75 : fSize * 0.35;
+            const sx = Math.cos(angle) * r;
+            const sy = Math.sin(angle) * r;
+            if (i === 0) ctx.moveTo(sx, sy);
+            else ctx.lineTo(sx, sy);
+          }
+          ctx.closePath();
+          ctx.fill();
+          
+          // Core bright white-cyan portal
+          ctx.fillStyle = '#ffffff';
+          ctx.shadowBlur = 20;
+          ctx.shadowColor = '#00ffcc';
+          ctx.beginPath();
+          ctx.arc(0, 0, fSize * 0.38, 0, Math.PI * 2);
+          ctx.fill();
+          
+          // Orbiting rings
+          ctx.strokeStyle = '#00ffcc';
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.arc(0, 0, fSize * 0.55, 0, Math.PI * 2);
+          ctx.stroke();
+          
+          // Dual high-energy satellites
+          ctx.fillStyle = '#ffffff';
+          for (let i = 0; i < 2; i++) {
+            const angle = i * Math.PI + frameCount * 0.18;
+            const nx = Math.cos(angle) * (fSize * 0.55);
+            const ny = Math.sin(angle) * (fSize * 0.55);
+            ctx.beginPath();
+            ctx.arc(nx, ny, 3.5, 0, Math.PI * 2);
             ctx.fill();
           }
         }
@@ -2233,6 +2334,98 @@
         });
       }
 
+      // 5.7 Draw Cyber-Octopus (Stage 10+)
+      if (octopus) {
+        ctx.save();
+        const ox = octopus.x * GRID_SIZE + GRID_SIZE / 2;
+        const oy = octopus.y * GRID_SIZE + GRID_SIZE / 2;
+        
+        // Circular bubble neon glow overlay
+        ctx.shadowBlur = 24;
+        ctx.shadowColor = '#00ffcc';
+        
+        // Draw 8 animated waving tentacles
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#bd00ff'; // neon purple tentacles
+        for (let i = 0; i < 8; i++) {
+          const tAngle = (i * Math.PI) / 4;
+          const wave = Math.sin(frameCount * 0.14 + i * 0.8) * 5.0; // waving offset
+          
+          // Tangent vector for wave distortion
+          const waveX = Math.cos(tAngle + Math.PI / 2) * wave;
+          const waveY = Math.sin(tAngle + Math.PI / 2) * wave;
+          
+          const startX = ox + Math.cos(tAngle) * 5;
+          const startY = oy + Math.sin(tAngle) * 5;
+          const endX = ox + Math.cos(tAngle) * 17 + waveX;
+          const endY = oy + Math.sin(tAngle) * 17 + waveY;
+          
+          ctx.beginPath();
+          ctx.moveTo(startX, startY);
+          ctx.quadraticCurveTo(ox + Math.cos(tAngle) * 11 + waveX * 0.5, oy + Math.sin(tAngle) * 11 + waveY * 0.5, endX, endY);
+          ctx.stroke();
+          
+          // Glowing tentacle tips
+          ctx.fillStyle = '#00ffcc';
+          ctx.beginPath();
+          ctx.arc(endX, endY, 2.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        
+        // Draw body radial gradient
+        let grad = ctx.createRadialGradient(ox, oy, 2, ox, oy, 11);
+        grad.addColorStop(0, '#ffffff'); // bright white core
+        grad.addColorStop(0.35, '#00ffcc'); // neon cyan
+        grad.addColorStop(1, '#bd00ff'); // rich purple edge
+        ctx.fillStyle = grad;
+        
+        ctx.beginPath();
+        ctx.arc(ox, oy, 10, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Glowing cyan-purple body border
+        ctx.strokeStyle = '#00ffcc';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        
+        // Expressive target eyes looking towards the closest food!
+        let targetX = ox;
+        let targetY = oy;
+        if (foods.length > 0 && foods[0]) {
+          const dxToFood = foods[0].x * GRID_SIZE + GRID_SIZE / 2 - ox;
+          const dyToFood = foods[0].y * GRID_SIZE + GRID_SIZE / 2 - oy;
+          const angleToFood = Math.atan2(dyToFood, dxToFood);
+          targetX = Math.cos(angleToFood);
+          targetY = Math.sin(angleToFood);
+        }
+        
+        // Draw Left Eye
+        const leX = ox - 4;
+        const leY = oy - 2;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(leX, leY, 3.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#ff007f'; // glowing pink pupils!
+        ctx.beginPath();
+        ctx.arc(leX + targetX * 1.3, leY + targetY * 1.3, 1.3, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Draw Right Eye
+        const reX = ox + 4;
+        const reY = oy - 2;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(reX, reY, 3.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#ff007f';
+        ctx.beginPath();
+        ctx.arc(reX + targetX * 1.3, reY + targetY * 1.3, 1.3, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.restore();
+      }
+
       // Restore camera translation context
       ctx.restore();
 
@@ -2244,7 +2437,9 @@
         ctx.fillStyle = foods[0] ? foods[0].color : '#00ffff';
         
         // Highlight transition alerts
-        if (alertText.includes("STAGE 9")) {
+        if (alertText.includes("STAGE 10")) {
+          ctx.fillStyle = "#00ffcc"; // Glowing space cyan-green
+        } else if (alertText.includes("STAGE 9")) {
           ctx.fillStyle = "#bd00ff"; // Space purple
         } else if (alertText.includes("STAGE 6")) {
           ctx.fillStyle = "#00e1ff"; // Sub-aquatic cyan
@@ -2316,7 +2511,63 @@
       }
 
       // 2. Compute next head coordinates
-      const head = { x: snake[0].x + dx, y: snake[0].y + dy };
+      let head = { x: snake[0].x + dx, y: snake[0].y + dy };
+
+      // Snake-Octopus Bounce check (Stage 10+)
+      if (octopus && head.x === octopus.x && head.y === octopus.y) {
+        // Play springy bounce SFX
+        audio.playBounceSFX();
+        
+        // Custom bounce particle burst
+        createExplosion(octopus.x, octopus.y, '#00ffcc', 10, 1);
+        
+        // Calculate relative left/right directions
+        let leftDir = { dx: 0, dy: 0 };
+        let rightDir = { dx: 0, dy: 0 };
+        
+        if (dx === 1) {
+          leftDir = { dx: 0, dy: -1 }; rightDir = { dx: 0, dy: 1 };
+        } else if (dx === -1) {
+          leftDir = { dx: 0, dy: 1 }; rightDir = { dx: 0, dy: -1 };
+        } else if (dy === 1) {
+          leftDir = { dx: 1, dy: 0 }; rightDir = { dx: -1, dy: 0 };
+        } else if (dy === -1) {
+          leftDir = { dx: -1, dy: 0 }; rightDir = { dx: 1, dy: 0 };
+        }
+        
+        // Helper to check if a direction leads to immediate tail or wall collision
+        const isSafeDir = (d) => {
+          const tx = snake[0].x + d.dx;
+          const ty = snake[0].y + d.dy;
+          // Wall check
+          if (tx < 0 || tx >= CELL_COUNT || ty < 0 || ty >= CELL_COUNT) return false;
+          // Tail check
+          for (let segment of snake) {
+            if (segment.x === tx && segment.y === ty) return false;
+          }
+          return true;
+        };
+        
+        const leftSafe = isSafeDir(leftDir);
+        const rightSafe = isSafeDir(rightDir);
+        
+        let selectedDir;
+        if (leftSafe && !rightSafe) {
+          selectedDir = leftDir;
+        } else if (!leftSafe && rightSafe) {
+          selectedDir = rightDir;
+        } else {
+          // Both safe or both blocked, pick randomly
+          selectedDir = Math.random() < 0.5 ? leftDir : rightDir;
+        }
+        
+        // Apply new direction
+        dx = selectedDir.dx;
+        dy = selectedDir.dy;
+        
+        // Recompute head coordinates in the new direction
+        head = { x: snake[0].x + dx, y: snake[0].y + dy };
+      }
 
       // 3. Wall Collision check
       if (head.x < 0 || head.x >= CELL_COUNT || head.y < 0 || head.y >= CELL_COUNT) {
@@ -2635,6 +2886,106 @@
         sharkGapTimer = 3000; // Reset / Hold gap timer if not in Stage 7+
         bullets = []; // Clear active bullets
       }
+
+      // 8. Stage 10 Cyber-Octopus Mechanics (Loop 20+)
+      if (audio.globalLoopCount >= 20) {
+        // A. Spawn Octopus if not present
+        if (octopus === null) {
+          let ox, oy;
+          let overlap = true;
+          let attempts = 0;
+          
+          while (overlap && attempts < 100) {
+            overlap = false;
+            attempts++;
+            ox = Math.floor(Math.random() * CELL_COUNT);
+            oy = Math.floor(Math.random() * CELL_COUNT);
+            
+            // Check snake body segments
+            for (let segment of snake) {
+              if (segment.x === ox && segment.y === oy) {
+                overlap = true;
+                break;
+              }
+            }
+            
+            // Check active foods
+            for (let f of foods) {
+              if (f && f.x === ox && f.y === oy) {
+                overlap = true;
+                break;
+              }
+            }
+            
+            // Check active sharks 2x2 footprints
+            for (let s of sharks) {
+              if (s && ox >= s.x && ox <= s.x + 1 && oy >= s.y && oy <= s.y + 1) {
+                overlap = true;
+                break;
+              }
+            }
+          }
+          
+          if (!overlap) {
+            octopus = { x: ox, y: oy };
+            octopusTickCounter = 0;
+          }
+        }
+        
+        // B. Update Octopus AI Walking (Once every 3 game ticks)
+        if (octopus) {
+          octopusTickCounter++;
+          if (octopusTickCounter % 3 === 0) {
+            // Find closest food
+            let closestFood = null;
+            let minDist = Infinity;
+            for (let f of foods) {
+              if (f) {
+                const dist = Math.abs(f.x - octopus.x) + Math.abs(f.y - octopus.y);
+                if (dist < minDist) {
+                  minDist = dist;
+                  closestFood = f;
+                }
+              }
+            }
+            
+            if (closestFood) {
+              // Calculate optimal BFS step
+              const step = pathfindBFS(octopus, closestFood);
+              if (step) {
+                // Take 1 step
+                octopus.x = step.x;
+                octopus.y = step.y;
+                
+                // Food eating check (upgrades standard food into a 1000pt glitch)
+                for (let i = 0; i < foods.length; i++) {
+                  const f = foods[i];
+                  if (f && f.x === octopus.x && f.y === octopus.y && f.type !== 3) {
+                    // Upgrade standard food
+                    f.type = 3;
+                    f.color = '#00ffcc';
+                    f.scoreValue = 1000;
+                    f.name = 'OCTO-GLITCH';
+                    
+                    // Play bubble arpeggio sound fx!
+                    audio.playOctopusEatSFX();
+                    
+                    // Golden particle enhancement explosion!
+                    createExplosion(octopus.x, octopus.y, '#ffe600', 18, 1);
+                    
+                    alertText = "ALERT: FOOD ENHANCED BY CYBER-OCTOPUS (+1000)";
+                    alertTimer = 110;
+                    break;
+                  }
+                }
+              }
+            }
+          }
+        }
+      } else {
+        octopus = null;
+        octopusTickCounter = 0;
+      }
     }
 
     // Unified step execution
@@ -2696,6 +3047,69 @@
       }
     });
 
+    // BFS Pathfinding Algorithm for Cyber-Octopus (Stage 10)
+    function pathfindBFS(start, target) {
+      if (start.x === target.x && start.y === target.y) return null;
+      
+      const queue = [ { x: start.x, y: start.y, path: [] } ];
+      const visited = new Set();
+      visited.add(start.x + ',' + start.y);
+      
+      const dirs = [
+        { x: 0, y: -1 }, // UP
+        { x: 0, y: 1 },  // DOWN
+        { x: -1, y: 0 }, // LEFT
+        { x: 1, y: 0 }   // RIGHT
+      ];
+      
+      while (queue.length > 0) {
+        const curr = queue.shift();
+        
+        if (curr.x === target.x && curr.y === target.y) {
+          if (curr.path.length > 0) {
+            return curr.path[0]; // Returns next cell coordinate to move to!
+          }
+          return null;
+        }
+        
+        for (const d of dirs) {
+          const nx = curr.x + d.x;
+          const ny = curr.y + d.y;
+          const key = nx + ',' + ny;
+          
+          if (nx >= 0 && nx < CELL_COUNT && ny >= 0 && ny < CELL_COUNT && !visited.has(key)) {
+            // Check snake collision obstacle (Octopus cannot cross the tail of the snake)
+            let isSnakeObstacle = false;
+            for (let s of snake) {
+              if (s.x === nx && s.y === ny) {
+                isSnakeObstacle = true;
+                break;
+              }
+            }
+            
+            // Check active 2x2 shark footprint obstacle
+            let isSharkObstacle = false;
+            for (let s of sharks) {
+              if (s && nx >= s.x && nx <= s.x + 1 && ny >= s.y && ny <= s.y + 1) {
+                isSharkObstacle = true;
+                break;
+              }
+            }
+            
+            if (!isSnakeObstacle && !isSharkObstacle) {
+              visited.add(key);
+              queue.push({
+                x: nx,
+                y: ny,
+                path: [...curr.path, { x: nx, y: ny }]
+              });
+            }
+          }
+        }
+      }
+      return null; // BFS ran out of paths, wait in place
+    }
+
     // --- GAME CONTROL SYSTEM ---
     function initializeGame() {
       score = 0;
@@ -2726,6 +3140,10 @@
       nextLaserCooldown = 3000;
       stage9StartSpeed = 135;
       stage9StartScore = 0;
+
+      // Clear Stage 10 cosmic states
+      octopus = null;
+      octopusTickCounter = 0;
 
       spawnSnake();
       spawnFood(0);
