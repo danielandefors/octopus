@@ -1256,39 +1256,58 @@
       }
 
       // 12. Ominous Jaws-themed cybernetic alternating-semitone low bass sweep
-      playSharkSFX() {
+      playSharkSFX(isStage8 = false) {
         this.init();
         if (!this.ctx || this.isMuted) return;
         const now = this.ctx.currentTime;
         
         // Jaws pattern: low rumbling E2 and F2 alternating, speeding up!
-        const intervals = [0.0, 0.45, 0.85, 1.20, 1.50, 1.75]; 
-        const freqs = [82.41, 87.31, 82.41, 87.31, 82.41, 87.31]; 
+        const intervals = isStage8 
+          ? [0.0, 0.35, 0.65, 0.90, 1.10, 1.25, 1.40, 1.50] // Stage 8: faster, more notes for extreme prominence!
+          : [0.0, 0.45, 0.85, 1.20, 1.50, 1.75]; 
+        const freqs = isStage8
+          ? [82.41, 87.31, 82.41, 87.31, 82.41, 87.31, 82.41, 87.31]
+          : [82.41, 87.31, 82.41, 87.31, 82.41, 87.31]; 
         
         intervals.forEach((timeOffset, idx) => {
           const triggerTime = now + timeOffset;
           const freq = freqs[idx];
           
-          const osc = this.ctx.createOscillator();
+          const osc1 = this.ctx.createOscillator();
+          const osc2 = isStage8 ? this.ctx.createOscillator() : null; // Stage 8: detuned dual supersaw sub-growl!
           const gain = this.ctx.createGain();
           const filter = this.ctx.createBiquadFilter();
           
-          osc.type = 'sawtooth';
-          osc.frequency.setValueAtTime(freq, triggerTime);
+          osc1.type = 'sawtooth';
+          osc1.frequency.setValueAtTime(freq, triggerTime);
+          
+          if (osc2) {
+            osc2.type = 'sawtooth';
+            osc2.frequency.setValueAtTime(freq - 3, triggerTime); // slightly detuned flat
+          }
           
           filter.type = 'lowpass';
-          filter.frequency.setValueAtTime(150, triggerTime); // Deep sub-bass roll-off
+          filter.frequency.setValueAtTime(isStage8 ? 260 : 150, triggerTime); // Stage 8: opens up cutoff for massive buzzy presence!
+          filter.Q.setValueAtTime(isStage8 ? 4.0 : 1.0, triggerTime);
           
           gain.gain.setValueAtTime(0, triggerTime);
-          gain.gain.linearRampToValueAtTime(0.7, triggerTime + 0.08); // Menacing swell
-          gain.gain.exponentialRampToValueAtTime(0.001, triggerTime + 0.35);
+          const maxGain = isStage8 ? 1.4 : 0.7; // Stage 8: twice as loud!
+          gain.gain.linearRampToValueAtTime(maxGain, triggerTime + 0.08); 
+          gain.gain.exponentialRampToValueAtTime(0.001, triggerTime + (isStage8 ? 0.45 : 0.35));
           
-          osc.connect(filter);
+          osc1.connect(filter);
+          if (osc2) {
+            osc2.connect(filter);
+          }
           filter.connect(gain);
           gain.connect(this.masterVolume);
           
-          osc.start(triggerTime);
-          osc.stop(triggerTime + 0.4);
+          osc1.start(triggerTime);
+          osc1.stop(triggerTime + 0.5);
+          if (osc2) {
+            osc2.start(triggerTime);
+            osc2.stop(triggerTime + 0.5);
+          }
         });
       }
 
@@ -1340,6 +1359,9 @@
           } else if (this.globalLoopCount === 13) {
             alertText = "WARNING: DEEP SECTOR // CYBER SHARKS DETECTED";
             alertTimer = 180;
+          } else if (this.globalLoopCount === 15) {
+            alertText = "FATAL ERROR: DEEP SECTOR OVERFLOW // SHARK SWARM";
+            alertTimer = 200;
           }
 
           // Randomize soaring counterpoint tracks, guaranteeing no track repeats > twice consecutively
@@ -1625,8 +1647,8 @@
     let isTransitioningToStage6 = false;
     let stage6StartScore = 0;
 
-    // Stage 7 Shark States
-    let shark = null;
+    // Stage 7 & 8 Shark States
+    let sharks = [];
     let sharkGapTimer = 3000;
 
     function triggerStage6UnderwaterTransition() {
@@ -2007,11 +2029,11 @@
         ctx.restore();
       });
 
-      // 5.5 Draw Menacing Cyber Shark (Stage 7+)
-      if (shark) {
+      // 5.5 Draw Menacing Cyber Sharks (Stage 7+)
+      sharks.forEach(sItem => {
         ctx.save();
-        const sx = shark.x * GRID_SIZE;
-        const sy = shark.y * GRID_SIZE;
+        const sx = sItem.x * GRID_SIZE;
+        const sy = sItem.y * GRID_SIZE;
         const sDim = GRID_SIZE * 2;
         
         // Deep glowing shadow
@@ -2054,7 +2076,7 @@
           ctx.fillRect(sx + sDim * 0.62, sy + sDim * 0.38, 4, 4);
         }
         ctx.restore();
-      }
+      });
 
       // Restore camera translation context
       ctx.restore();
@@ -2153,10 +2175,13 @@
         }
       }
 
-      // 4.5. Stage 7 Shark Collision check
-      if (shark && head.x >= shark.x && head.x <= shark.x + 1 && head.y >= shark.y && head.y <= shark.y + 1) {
-        handleGameOver();
-        return;
+      // 4.5. Stage 7 & 8 Shark Collision check
+      for (let i = 0; i < sharks.length; i++) {
+        const s = sharks[i];
+        if (s && head.x >= s.x && head.x <= s.x + 1 && head.y >= s.y && head.y <= s.y + 1) {
+          handleGameOver();
+          return;
+        }
       }
 
       // 5. Place head
@@ -2233,16 +2258,27 @@
         }
       }
 
-      // 7. Stage 7 Shark Mechanics (Loop 13+)
+      // 7. Stage 7 & 8 Shark Mechanics (Loop 13+)
       if (audio.globalLoopCount >= 13) {
-        if (shark) {
-          shark.timeLeft -= currentSpeed;
-          if (shark.timeLeft <= 0) {
-            shark = null;
-            // Schedule next shark gap (2 to 6 seconds)
+        // A. Update active sharks
+        sharks.forEach(s => {
+          s.timeLeft -= currentSpeed;
+        });
+        
+        const activeCountBefore = sharks.length;
+        sharks = sharks.filter(s => s.timeLeft > 0);
+        const activeCountAfter = sharks.length;
+        
+        // If a shark disappeared, schedule a new gap if not already set and space remains
+        const maxSharks = audio.globalLoopCount >= 15 ? 3 : 1;
+        if (activeCountAfter < activeCountBefore && sharks.length < maxSharks) {
+          if (sharkGapTimer <= 0) {
             sharkGapTimer = 2000 + Math.random() * 4000;
           }
-        } else {
+        }
+        
+        // B. Spawn new shark if gap timer completed and space remains
+        if (sharks.length < maxSharks) {
           sharkGapTimer -= currentSpeed;
           if (sharkGapTimer <= 0) {
             // Spawn a new 2x2 shark
@@ -2274,16 +2310,35 @@
                   break;
                 }
               }
+              
+              // Check overlap with other active sharks (to prevent tight visual overlaps)
+              for (let i = 0; i < sharks.length; i++) {
+                if (sharks[i] && 
+                    sharks[i].x >= sx - 1 && sharks[i].x <= sx + 1 && 
+                    sharks[i].y >= sy - 1 && sharks[i].y <= sy + 1) {
+                  overlap = true;
+                  break;
+                }
+              }
             }
             
             if (!overlap) {
-              shark = {
+              const isStage8 = audio.globalLoopCount >= 15;
+              const activeDuration = isStage8 
+                ? (5000 + Math.random() * 3000)  // Stage 8: 5 to 8 seconds (2-3s longer!)
+                : (3000 + Math.random() * 2000); // Stage 7: 3 to 5 seconds
+              
+              sharks.push({
                 x: sx,
                 y: sy,
-                timeLeft: 3000 + Math.random() * 2000 // 3 to 5 seconds duration
-              };
-              // Play Jaws-themed ominous sound!
-              audio.playSharkSFX();
+                timeLeft: activeDuration
+              });
+              
+              // Play Jaws-themed ominous sound (Stage 8 detunes & boosts loudness)
+              audio.playSharkSFX(isStage8);
+              
+              // Schedule next shark gap (2 to 6 seconds)
+              sharkGapTimer = 2000 + Math.random() * 4000;
             } else {
               // Try again in 0.5s if we failed to find an empty spot
               sharkGapTimer = 500;
@@ -2291,8 +2346,8 @@
           }
         }
       } else {
-        shark = null;
-        sharkGapTimer = 3000; // Reset / Hold gap timer if not in Stage 7
+        sharks = [];
+        sharkGapTimer = 3000; // Reset / Hold gap timer if not in Stage 7+
       }
     }
 
@@ -2374,8 +2429,8 @@
         audio.underwaterFilter.frequency.setValueAtTime(20000, audio.ctx.currentTime);
       }
 
-      // Clear Stage 7 shark states
-      shark = null;
+      // Clear Stage 7 & 8 shark states
+      sharks = [];
       sharkGapTimer = 3000;
 
       spawnSnake();
