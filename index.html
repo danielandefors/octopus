@@ -1718,6 +1718,8 @@
     let bullets = [];
     let timeSinceLastShot = 0;
     let nextLaserCooldown = 3000;
+    let stage9StartSpeed = 135;
+    let stage9StartScore = 0;
     let stars = [];
     for (let i = 0; i < 25; i++) {
       stars.push({
@@ -2387,8 +2389,9 @@
 
         // Speed ramp scaling
         if (audio.globalLoopCount >= 17) {
-          const speedReduction = Math.floor(score / 100) * 2.0;
-          currentSpeed = Math.max(70, 115 - speedReduction); // Fast cosmic space physics speed!
+          const stage9ScoreDiff = score - stage9StartScore;
+          const speedReduction = Math.floor(stage9ScoreDiff / 100) * 6.5; // Accelerate faster (6.5ms per 100 points) in Stage 9!
+          currentSpeed = Math.max(65, stage9StartSpeed - speedReduction);
         } else if (isUnderwaterMode || (audio.globalLoopCount >= 11 && audio.globalLoopCount < 17)) {
           const stage6ScoreDiff = score - stage6StartScore;
           const speedReduction = Math.floor(stage6ScoreDiff / 100) * 4.0; // Slow ramp-up under water
@@ -2418,14 +2421,11 @@
 
       // 7. Stage 7 & 8 & 9 Shark Mechanics (Loop 13+)
       if (audio.globalLoopCount >= 13) {
-        // Transition from underwater physics speed to cosmic physics speed in Stage 9
+        // Transition from underwater physics speed to cosmic physics speed in Stage 9 (speed remains identical to the end of Stage 8 at transition start)
         if (audio.globalLoopCount >= 17 && isUnderwaterMode) {
           isUnderwaterMode = false;
-          const speedReduction = Math.floor(score / 100) * 2.0;
-          currentSpeed = Math.max(70, 115 - speedReduction);
-          
-          clearInterval(gameLoopInterval);
-          gameLoopInterval = setInterval(gameStep, currentSpeed);
+          stage9StartSpeed = currentSpeed; // Record exact speed from Stage 8
+          stage9StartScore = score;        // Record score at transition start
         }
 
         // Stage 9 constraint: at least one shark visible at all times
@@ -2724,6 +2724,8 @@
       bullets = [];
       timeSinceLastShot = 0;
       nextLaserCooldown = 3000;
+      stage9StartSpeed = 135;
+      stage9StartScore = 0;
 
       spawnSnake();
       spawnFood(0);
