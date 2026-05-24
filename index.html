@@ -955,8 +955,10 @@
       }
 
       // 6. Ambient Chord Pad (Chords wash)
-      playPad(chordFreqs, time, duration) {
+      playPad(chordFreqs, time, duration, globalLoopCount = 0) {
         if (!this.ctx || this.isMuted) return;
+
+        const isStage5 = (globalLoopCount >= 18 && globalLoopCount < 22);
 
         chordFreqs.forEach(freq => {
           const osc = this.ctx.createOscillator();
@@ -967,12 +969,19 @@
           osc.frequency.setValueAtTime(freq, time);
 
           filter.type = 'lowpass';
-          filter.frequency.value = 500;
+          filter.frequency.setValueAtTime(isStage5 ? 850 : 500, time); // slightly brighter for short chords
 
           gain.gain.setValueAtTime(0, time);
-          gain.gain.linearRampToValueAtTime(0.1, time + 0.5); 
-          gain.gain.setValueAtTime(0.1, time + duration - 0.5);
-          gain.gain.linearRampToValueAtTime(0, time + duration);
+          if (isStage5) {
+            // Short chord pad: fade in quickly, hold, and fade out before 1 second
+            gain.gain.linearRampToValueAtTime(0.08, time + 0.12); 
+            gain.gain.setValueAtTime(0.08, time + duration - 0.15);
+            gain.gain.linearRampToValueAtTime(0.001, time + duration);
+          } else {
+            gain.gain.linearRampToValueAtTime(0.1, time + 0.5); 
+            gain.gain.setValueAtTime(0.1, time + duration - 0.5);
+            gain.gain.linearRampToValueAtTime(0, time + duration);
+          }
 
           osc.connect(filter);
           filter.connect(gain);
@@ -1457,8 +1466,12 @@
 
         // --- 4. AMBIENT CHORD WASH ---
         if (step === 0) {
-          const chordDuration = (60.0 / this.tempo) * 4; 
-          this.playPad(activePad, time, chordDuration * 0.98);
+          let chordDuration = (60.0 / this.tempo) * 4; 
+          if (this.globalLoopCount >= 18 && this.globalLoopCount < 22) {
+            // Stage 5: Short chords (0.85 seconds, well under a second)
+            chordDuration = 0.85;
+          }
+          this.playPad(activePad, time, chordDuration * 0.98, this.globalLoopCount);
         }
 
         // --- 5. RETRO LEAD MELODY (Primary hook) ---
