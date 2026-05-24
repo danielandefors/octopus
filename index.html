@@ -1279,7 +1279,7 @@
           } else if (this.globalLoopCount === 18) {
             alertText = "FATAL ERROR: STAGE 5 CORE DISINTEGRATION ENGAGED";
             alertTimer = 200;
-            this.tempo = 138; // Recalculate tempo to 138 BPM!
+            this.tempo = 130; // Recalculate tempo to 130 BPM (slightly faster than original)!
           } else if (this.globalLoopCount === 22) {
             alertText = "CRITICAL: MAINBOARD FLOODED // POWERDOWN INBOUND";
             alertTimer = 200;
@@ -1466,7 +1466,10 @@
           659.25, 0, 587.33, 0, 523.25, 0, 0, 0, 493.88, 0, 440.00, 0, 493.88, 0, 440.00, 0
         ];
 
-        const targetFreq = melody[this.globalStep];
+        let targetFreq = melody[this.globalStep];
+        if (targetFreq > 0 && this.globalLoopCount >= 18 && this.globalLoopCount < 22) {
+          targetFreq = 659.25; // Hammer E5 repeatedly in Stage 5, keeping original rhythm intact!
+        }
         if (targetFreq > 0) {
           this.playLead(targetFreq, time, stepDuration * 1.8, isIntensityEngaged);
           
