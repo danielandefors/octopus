@@ -1281,9 +1281,11 @@
             alertTimer = 200;
             this.tempo = 130; // Recalculate tempo to 130 BPM (slightly faster than original)!
           } else if (this.globalLoopCount === 22) {
-            alertText = "CRITICAL: MAINBOARD FLOODED // POWERDOWN INBOUND";
-            alertTimer = 200;
-            triggerStage6UnderwaterTransition();
+            if (!isUnderwaterMode && !isTransitioningToStage6) {
+              alertText = "CRITICAL: MAINBOARD FLOODED // POWERDOWN INBOUND";
+              alertTimer = 200;
+              triggerStage6UnderwaterTransition();
+            }
           }
 
           // Randomize soaring counterpoint tracks, guaranteeing no track repeats > twice consecutively
@@ -1555,10 +1557,12 @@
     // Stage 6 Underwater Mode States
     let isUnderwaterMode = false;
     let isTransitioningToStage6 = false;
+    let stage6StartScore = 0;
 
     function triggerStage6UnderwaterTransition() {
       if (isTransitioningToStage6) return;
       isTransitioningToStage6 = true;
+      stage6StartScore = score; // Record score IMMEDIATELY upon entering Stage 6
       
       // Pause active physics update loop
       gameActive = false;
@@ -2077,8 +2081,14 @@
         }
 
         // Speed ramp scaling
-        const speedReduction = Math.floor(score / 100) * 1.5;
-        currentSpeed = Math.max(55, baseSpeed - speedReduction);
+        if (isUnderwaterMode || audio.globalLoopCount >= 22) {
+          const stage6ScoreDiff = score - stage6StartScore;
+          const speedReduction = Math.floor(stage6ScoreDiff / 100) * 4.0; // Slow ramp-up under water
+          currentSpeed = Math.max(120, 270 - speedReduction);
+        } else {
+          const speedReduction = Math.floor(score / 100) * 1.5;
+          currentSpeed = Math.max(55, baseSpeed - speedReduction);
+        }
         
         clearInterval(gameLoopInterval);
         gameLoopInterval = setInterval(gameStep, currentSpeed);
@@ -2172,6 +2182,7 @@
       // Clear Stage 6 underwater states
       isUnderwaterMode = false;
       isTransitioningToStage6 = false;
+      stage6StartScore = 0;
       if (audio.ctx && audio.underwaterFilter) {
         audio.underwaterFilter.frequency.setValueAtTime(20000, audio.ctx.currentTime);
       }
