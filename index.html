@@ -2927,7 +2927,7 @@
           }
           
           if (!overlap) {
-            octopus = { x: ox, y: oy };
+            octopus = { x: ox, y: oy, wanderTarget: null, wanderStepsLeft: 0 };
             octopusTickCounter = 0;
           }
         }
@@ -2936,11 +2936,11 @@
         if (octopus) {
           octopusTickCounter++;
           if (octopusTickCounter % 3 === 0) {
-            // Find closest food
+            // Find closest unenhanced food (f.type !== 3)
             let closestFood = null;
             let minDist = Infinity;
             for (let f of foods) {
-              if (f) {
+              if (f && f.type !== 3) {
                 const dist = Math.abs(f.x - octopus.x) + Math.abs(f.y - octopus.y);
                 if (dist < minDist) {
                   minDist = dist;
@@ -2950,6 +2950,10 @@
             }
             
             if (closestFood) {
+              // Clear wander states if we have a food target
+              octopus.wanderTarget = null;
+              octopus.wanderStepsLeft = 0;
+              
               // Calculate optimal BFS step
               const step = pathfindBFS(octopus, closestFood);
               if (step) {
@@ -2978,6 +2982,33 @@
                     break;
                   }
                 }
+              }
+            } else {
+              // Aimless wandering mode (no unenhanced foods left!)
+              if (!octopus.wanderTarget || octopus.wanderStepsLeft <= 0 || (octopus.x === octopus.wanderTarget.x && octopus.y === octopus.wanderTarget.y)) {
+                let tx, ty;
+                let farAttempts = 0;
+                
+                // Pick a target coordinate far away to encourage exploration across quadrants
+                do {
+                  tx = Math.floor(Math.random() * CELL_COUNT);
+                  ty = Math.floor(Math.random() * CELL_COUNT);
+                  farAttempts++;
+                } while (Math.abs(tx - octopus.x) + Math.abs(ty - octopus.y) < 12 && farAttempts < 100);
+                
+                octopus.wanderTarget = { x: tx, y: ty };
+                octopus.wanderStepsLeft = 12 + Math.floor(Math.random() * 8); // 12-20 steps
+              }
+              
+              // Move towards wander target using BFS pathfinder
+              const step = pathfindBFS(octopus, octopus.wanderTarget);
+              if (step) {
+                octopus.x = step.x;
+                octopus.y = step.y;
+                octopus.wanderStepsLeft--;
+              } else {
+                // If path is blocked, force picking a different target on next tick
+                octopus.wanderTarget = null;
               }
             }
           }
