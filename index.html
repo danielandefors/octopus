@@ -859,11 +859,11 @@
 
         // Stage 4 & 5 detuned supersaw helper oscillator
         let osc3 = null;
-        if (globalLoopCount >= 18) {
+        if (globalLoopCount >= 10) {
           osc3 = this.ctx.createOscillator();
           osc3.type = 'sawtooth';
           osc3.frequency.setValueAtTime(freq + 4, time); // Stage 5: detuned chorus sweep sharp
-        } else if (globalLoopCount >= 14) {
+        } else if (globalLoopCount >= 8) {
           osc3 = this.ctx.createOscillator();
           osc3.type = 'sawtooth';
           osc3.frequency.setValueAtTime(freq - 3, time); // Stage 4: detuned chorus sweep flat
@@ -874,19 +874,19 @@
         let endCutoff = 1100;
         let filterQ = 1.0;
         
-        if (globalLoopCount >= 18) { // Stage 5: Extreme Resonant Acid Squelch Growl!
+        if (globalLoopCount >= 10) { // Stage 5: Extreme Resonant Acid Squelch Growl!
           startCutoff = 800;
           endCutoff = 3500;
           filterQ = 6.0;
-        } else if (globalLoopCount >= 14) { // Stage 4: High Resonant growl chug!
+        } else if (globalLoopCount >= 8) { // Stage 4: High Resonant growl chug!
           startCutoff = 600;
           endCutoff = 2900;
           filterQ = 4.2; // Squelchy growl
-        } else if (globalLoopCount >= 10) { // Stage 3 Apex
+        } else if (globalLoopCount >= 6) { // Stage 3 Apex
           startCutoff = 550;
           endCutoff = 2700;
           filterQ = 1.5;
-        } else if (globalLoopCount >= 6) { // Stage 2 High
+        } else if (globalLoopCount >= 4) { // Stage 2 High
           startCutoff = 420;
           endCutoff = 2000;
         }
@@ -897,7 +897,7 @@
         filter.frequency.exponentialRampToValueAtTime(150, time + duration);
         filter.Q.setValueAtTime(filterQ, time);
 
-        const gainLevel = globalLoopCount >= 18 ? 1.05 : globalLoopCount >= 14 ? 0.95 : globalLoopCount >= 10 ? 0.90 : globalLoopCount >= 6 ? 0.82 : 0.75;
+        const gainLevel = globalLoopCount >= 10 ? 1.05 : globalLoopCount >= 8 ? 0.95 : globalLoopCount >= 6 ? 0.90 : globalLoopCount >= 4 ? 0.82 : 0.75;
         gain.gain.setValueAtTime(gainLevel, time); 
         gain.gain.exponentialRampToValueAtTime(0.01, time + duration);
 
@@ -932,8 +932,8 @@
         chordGain.gain.exponentialRampToValueAtTime(0.001, time + duration);
 
         // Open up chords filter cutoff based on stages
-        const startCutoff = globalLoopCount >= 10 ? 1200 : 850;
-        const endCutoff = globalLoopCount >= 10 ? 550 : 350;
+        const startCutoff = globalLoopCount >= 6 ? 1200 : 850;
+        const endCutoff = globalLoopCount >= 6 ? 550 : 350;
 
         const filter = this.ctx.createBiquadFilter();
         filter.type = 'lowpass';
@@ -958,7 +958,7 @@
       playPad(chordFreqs, time, duration, globalLoopCount = 0) {
         if (!this.ctx || this.isMuted) return;
 
-        const isStage5 = (globalLoopCount >= 18 && globalLoopCount < 22);
+        const isStage5 = (globalLoopCount >= 10 && globalLoopCount < 11);
 
         chordFreqs.forEach(freq => {
           const osc = this.ctx.createOscillator();
@@ -1017,7 +1017,7 @@
 
         gain.gain.setValueAtTime(0, time);
         
-        const isStage4 = (this.globalLoopCount >= 14);
+        const isStage4 = (this.globalLoopCount >= 8);
         const leadVolume = isStage4 ? 0.042 : (isHighIntensity ? 0.09 : 0.08); // scale down to prevent clipping with waveshaper overdrive
         gain.gain.linearRampToValueAtTime(leadVolume, time + 0.02);
         gain.gain.exponentialRampToValueAtTime(leadVolume * 0.44, time + duration - 0.02);
@@ -1317,27 +1317,27 @@
         if (this.globalStep === 0 && lastGlobalStep === 63) {
           this.globalLoopCount++; 
           
-          // Trigger Stage warning alerts (Stage 2 at 6 loops, Stage 3 at 10 loops, Stage 4 at 14 loops, Stage 5 at 18 loops!)
-          if (this.globalLoopCount === 6) {
+          // Trigger Stage warning alerts (Stage 2 at 4 loops, Stage 3 at 6 loops, Stage 4 at 8 loops, Stage 5 at 10 loops, Stage 6 at 11 loops, Stage 7 at 13 loops)
+          if (this.globalLoopCount === 4) {
             alertText = "ALERT: STAGE 2 INTENSITY ENGAGED";
             alertTimer = 110;
-          } else if (this.globalLoopCount === 10) {
+          } else if (this.globalLoopCount === 6) {
             alertText = "WARNING: STAGE 3 APEX INTENSITY ENGAGED";
             alertTimer = 120;
-          } else if (this.globalLoopCount === 14) {
+          } else if (this.globalLoopCount === 8) {
             alertText = "CRITICAL: STAGE 4 APEX CHUG // HEADBANG MODE ENGAGED";
             alertTimer = 160;
-          } else if (this.globalLoopCount === 18) {
+          } else if (this.globalLoopCount === 10) {
             alertText = "FATAL ERROR: STAGE 5 CORE DISINTEGRATION ENGAGED";
             alertTimer = 200;
             this.tempo = 130; // Recalculate tempo to 130 BPM (slightly faster than original)!
-          } else if (this.globalLoopCount === 22) {
+          } else if (this.globalLoopCount === 11) {
             if (!isUnderwaterMode && !isTransitioningToStage6) {
               alertText = "CRITICAL: MAINBOARD FLOODED // POWERDOWN INBOUND";
               alertTimer = 200;
               triggerStage6UnderwaterTransition();
             }
-          } else if (this.globalLoopCount === 23) {
+          } else if (this.globalLoopCount === 13) {
             alertText = "WARNING: DEEP SECTOR // CYBER SHARKS DETECTED";
             alertTimer = 180;
           }
@@ -1396,12 +1396,12 @@
         const stepDuration = (60.0 / this.tempo) / 4;
         
         // Progressive Stages flags
-        const isStage2 = (this.globalLoopCount >= 6 && this.globalLoopCount < 10);
-        const isStage3 = (this.globalLoopCount >= 10 && this.globalLoopCount < 14);
-        const isStage4 = (this.globalLoopCount >= 14 && this.globalLoopCount < 18);
-        const isStage5 = (this.globalLoopCount >= 18 && this.globalLoopCount < 22);
-        const isStage6 = (this.globalLoopCount >= 22);
-        const isIntensityEngaged = (this.globalLoopCount >= 6); 
+        const isStage2 = (this.globalLoopCount >= 4 && this.globalLoopCount < 6);
+        const isStage3 = (this.globalLoopCount >= 6 && this.globalLoopCount < 8);
+        const isStage4 = (this.globalLoopCount >= 8 && this.globalLoopCount < 10);
+        const isStage5 = (this.globalLoopCount >= 10 && this.globalLoopCount < 11);
+        const isStage6 = (this.globalLoopCount >= 11);
+        const isIntensityEngaged = (this.globalLoopCount >= 4); 
 
         // --- 1. SYNCAPATED DRIVING BASSLINE ---
         const bassRhythm = [0, 2, 3, 4, 6, 8, 10, 11, 12, 14];
@@ -1507,7 +1507,7 @@
         // --- 4. AMBIENT CHORD WASH ---
         if (step === 0) {
           let chordDuration = (60.0 / this.tempo) * 4; 
-          if (this.globalLoopCount >= 18 && this.globalLoopCount < 22) {
+          if (this.globalLoopCount >= 10 && this.globalLoopCount < 11) {
             // Stage 5: Short chords (0.85 seconds, well under a second)
             chordDuration = 0.85;
           }
@@ -1527,22 +1527,22 @@
         ];
 
         let targetFreq = melody[this.globalStep];
-        if (targetFreq > 0 && this.globalLoopCount >= 18 && this.globalLoopCount < 22) {
+        if (targetFreq > 0 && this.globalLoopCount >= 10 && this.globalLoopCount < 11) {
           targetFreq = 659.25; // Hammer E5 repeatedly in Stage 5, keeping original rhythm intact!
         }
         if (targetFreq > 0) {
           this.playLead(targetFreq, time, stepDuration * 1.8, isIntensityEngaged);
           
-          if (this.globalLoopCount >= 18) {
+          if (this.globalLoopCount >= 10) {
             // Stage 5: Ultra-distorted guitar lead layered in massive three-voice power chords (Octave up, octave down, and perfect fifth!)
             this.playLead(targetFreq * 2, time, stepDuration * 1.5, true);     // High Octave
             this.playLead(targetFreq * 1.5, time, stepDuration * 1.6, true);   // Perfect Fifth
             this.playLead(targetFreq * 0.5, time, stepDuration * 1.8, true);   // Heavy Low Octave chug!
-          } else if (this.globalLoopCount >= 14) {
+          } else if (this.globalLoopCount >= 8) {
             // Stage 4: Massive soaring synthesized metal POWER CHORDS! (Root + Fifth + Octave)
             this.playLead(targetFreq * 2, time, stepDuration * 1.5, true);   // Octave
             this.playLead(targetFreq * 1.5, time, stepDuration * 1.6, true); // Perfect Fifth!
-          } else if (this.globalLoopCount >= 10) {
+          } else if (this.globalLoopCount >= 6) {
             // Stage 3: Octave doubling
             this.playLead(targetFreq * 2, time, stepDuration * 1.5, true);
           }
@@ -1553,7 +1553,7 @@
           const activePattern = this.highMelodyPatterns[this.currentPatternIndex];
           const highFreq = activePattern[this.globalStep];
           if (highFreq > 0) {
-            const isStage5 = (this.globalLoopCount >= 18 && this.globalLoopCount < 22);
+            const isStage5 = (this.globalLoopCount >= 10 && this.globalLoopCount < 11);
             if (isStage5) {
               const noteDuration = stepDuration * 0.45;
               this.playHighLead(highFreq, time, noteDuration, true);
@@ -1799,9 +1799,9 @@
     
     function drawGame() {
       // Apply real-time visual screen shake synced to sequencer beats in Stage 4, 5, and 6!
-      const isStage4 = (audio.globalLoopCount >= 14 && audio.globalLoopCount < 18);
-      const isStage5 = (audio.globalLoopCount >= 18 && audio.globalLoopCount < 22);
-      const isStage6 = (audio.globalLoopCount >= 22);
+      const isStage4 = (audio.globalLoopCount >= 8 && audio.globalLoopCount < 10);
+      const isStage5 = (audio.globalLoopCount >= 10 && audio.globalLoopCount < 11);
+      const isStage6 = (audio.globalLoopCount >= 11);
       let shakeOffset = { x: 0, y: 0 };
       
       if ((isStage4 || isStage5 || isStage6) && audio.isPlayingMusic) {
@@ -2196,7 +2196,7 @@
         pendingGrowth += eatenFood.growthValue;
 
         // If in Stage 5, maintain 3 foods. Otherwise standard 1 food behavior.
-        if (audio.globalLoopCount >= 18) {
+        if (audio.globalLoopCount >= 10) {
           spawnFood(foodEatenIndex);
         } else {
           foods.splice(foodEatenIndex, 1);
@@ -2206,7 +2206,7 @@
         }
 
         // Speed ramp scaling
-        if (isUnderwaterMode || audio.globalLoopCount >= 22) {
+        if (isUnderwaterMode || audio.globalLoopCount >= 11) {
           const stage6ScoreDiff = score - stage6StartScore;
           const speedReduction = Math.floor(stage6ScoreDiff / 100) * 4.0; // Slow ramp-up under water
           currentSpeed = Math.max(120, 270 - speedReduction);
@@ -2227,14 +2227,14 @@
       }
 
       // Maintain up to 3 foods on the grid in Stage 5!
-      if (audio.globalLoopCount >= 18 && foods.length < 3) {
+      if (audio.globalLoopCount >= 10 && foods.length < 3) {
         while (foods.length < 3) {
           spawnFood(foods.length);
         }
       }
 
-      // 7. Stage 7 Shark Mechanics (Loop 23+)
-      if (audio.globalLoopCount >= 23) {
+      // 7. Stage 7 Shark Mechanics (Loop 13+)
+      if (audio.globalLoopCount >= 13) {
         if (shark) {
           shark.timeLeft -= currentSpeed;
           if (shark.timeLeft <= 0) {
