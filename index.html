@@ -708,6 +708,7 @@
         this.currentStep = 0;
         this.globalStep = 0;
         this.globalLoopCount = 0;
+        this.tempo = 126; // Reset tempo to default!
         this.currentPatternIndex = Math.floor(Math.random() * this.highMelodyPatterns.length);
         this.consecutivePatternCount = 1;
         this.scheduler();
@@ -846,12 +847,16 @@
         osc2.type = 'triangle';
         osc2.frequency.setValueAtTime(freq / 2, time);
 
-        // Stage 4 detuned supersaw helper oscillator
+        // Stage 4 & 5 detuned supersaw helper oscillator
         let osc3 = null;
-        if (globalLoopCount >= 14) {
+        if (globalLoopCount >= 18) {
           osc3 = this.ctx.createOscillator();
           osc3.type = 'sawtooth';
-          osc3.frequency.setValueAtTime(freq - 3, time); // detuned chorus sweep
+          osc3.frequency.setValueAtTime(freq + 4, time); // Stage 5: detuned chorus sweep sharp
+        } else if (globalLoopCount >= 14) {
+          osc3 = this.ctx.createOscillator();
+          osc3.type = 'sawtooth';
+          osc3.frequency.setValueAtTime(freq - 3, time); // Stage 4: detuned chorus sweep flat
         }
 
         // Filter sweeps based on Stage
@@ -859,7 +864,11 @@
         let endCutoff = 1100;
         let filterQ = 1.0;
         
-        if (globalLoopCount >= 14) { // Stage 4: High Resonant growl chug!
+        if (globalLoopCount >= 18) { // Stage 5: Extreme Resonant Acid Squelch Growl!
+          startCutoff = 800;
+          endCutoff = 3500;
+          filterQ = 6.0;
+        } else if (globalLoopCount >= 14) { // Stage 4: High Resonant growl chug!
           startCutoff = 600;
           endCutoff = 2900;
           filterQ = 4.2; // Squelchy growl
@@ -878,7 +887,7 @@
         filter.frequency.exponentialRampToValueAtTime(150, time + duration);
         filter.Q.setValueAtTime(filterQ, time);
 
-        const gainLevel = globalLoopCount >= 14 ? 0.95 : globalLoopCount >= 10 ? 0.90 : globalLoopCount >= 6 ? 0.82 : 0.75;
+        const gainLevel = globalLoopCount >= 18 ? 1.05 : globalLoopCount >= 14 ? 0.95 : globalLoopCount >= 10 ? 0.90 : globalLoopCount >= 6 ? 0.82 : 0.75;
         gain.gain.setValueAtTime(gainLevel, time); 
         gain.gain.exponentialRampToValueAtTime(0.01, time + duration);
 
@@ -1208,7 +1217,7 @@
         if (this.globalStep === 0 && lastGlobalStep === 63) {
           this.globalLoopCount++; 
           
-          // Trigger Stage warning alerts (Stage 2 at 6 loops, Stage 3 at 10 loops, Stage 4 at 14 loops!)
+          // Trigger Stage warning alerts (Stage 2 at 6 loops, Stage 3 at 10 loops, Stage 4 at 14 loops, Stage 5 at 18 loops!)
           if (this.globalLoopCount === 6) {
             alertText = "ALERT: STAGE 2 INTENSITY ENGAGED";
             alertTimer = 110;
@@ -1218,6 +1227,10 @@
           } else if (this.globalLoopCount === 14) {
             alertText = "CRITICAL: STAGE 4 APEX CHUG // HEADBANG MODE ENGAGED";
             alertTimer = 160;
+          } else if (this.globalLoopCount === 18) {
+            alertText = "FATAL ERROR: STAGE 5 CORE DISINTEGRATION ENGAGED";
+            alertTimer = 200;
+            this.tempo = 138; // Recalculate tempo to 138 BPM!
           }
 
           // Randomize soaring counterpoint tracks, guaranteeing no track repeats > twice consecutively
@@ -1276,7 +1289,8 @@
         // Progressive Stages flags
         const isStage2 = (this.globalLoopCount >= 6 && this.globalLoopCount < 10);
         const isStage3 = (this.globalLoopCount >= 10 && this.globalLoopCount < 14);
-        const isStage4 = (this.globalLoopCount >= 14);
+        const isStage4 = (this.globalLoopCount >= 14 && this.globalLoopCount < 18);
+        const isStage5 = (this.globalLoopCount >= 18);
         const isIntensityEngaged = (this.globalLoopCount >= 6); 
 
         // --- 1. SYNCAPATED DRIVING BASSLINE ---
@@ -1294,8 +1308,18 @@
         }
 
         // --- 3. DRIVING DRUMS TRACK ---
-        // Stage 4 headbanger: Constant heavy kicks + claps Snare
-        if (isStage4) {
+        if (isStage5) {
+          // Stage 5 hyper chug: double bass kick speedroll!
+          if (step % 2 === 0 || step === 3 || step === 7 || step === 11 || step === 15) {
+            this.playKick(time);
+          }
+          // Extra heavy clashing arena Snares on 4, 8, 12, 14
+          if (step === 4 || step === 8 || step === 12 || step === 14) {
+            this.playSnare(time, 1.6);
+          }
+        }
+        else if (isStage4) {
+          // Stage 4 headbanger: Constant heavy kicks + claps Snare
           // Double Kicks on every even beat chug
           if (step === 0 || step === 2 || step === 4 || step === 6 || step === 8 || step === 10 || step === 12 || step === 14) {
             this.playKick(time);
@@ -1315,7 +1339,12 @@
         }
 
         // Hi-Hat rhythms depending on Stage
-        if (isStage4) {
+        if (isStage5) {
+          // Stage 5: continuous driving open hats on offbeats, heavy closed hats on beats
+          const isOffbeat = (step % 2 !== 0);
+          this.playHihat(time, isOffbeat ? 1.3 : 0.6, isOffbeat);
+        }
+        else if (isStage4) {
           // Stage 4: continuous 16th note chug, with open hat ticks on offbeats!
           const isOffbeat = (step === 2 || step === 6 || step === 10 || step === 14);
           const isDrumBeat = (step === 0 || step === 4 || step === 8 || step === 12);
@@ -1372,7 +1401,12 @@
         if (targetFreq > 0) {
           this.playLead(targetFreq, time, stepDuration * 1.8, isIntensityEngaged);
           
-          if (this.globalLoopCount >= 14) {
+          if (this.globalLoopCount >= 18) {
+            // Stage 5: Ultra-distorted guitar lead layered in massive three-voice power chords (Octave up, octave down, and perfect fifth!)
+            this.playLead(targetFreq * 2, time, stepDuration * 1.5, true);     // High Octave
+            this.playLead(targetFreq * 1.5, time, stepDuration * 1.6, true);   // Perfect Fifth
+            this.playLead(targetFreq * 0.5, time, stepDuration * 1.8, true);   // Heavy Low Octave chug!
+          } else if (this.globalLoopCount >= 14) {
             // Stage 4: Massive soaring synthesized metal POWER CHORDS! (Root + Fifth + Octave)
             this.playLead(targetFreq * 2, time, stepDuration * 1.5, true);   // Octave
             this.playLead(targetFreq * 1.5, time, stepDuration * 1.6, true); // Perfect Fifth!
@@ -1418,7 +1452,7 @@
 
     // Game states
     let snake = [];
-    let food = { x: 0, y: 0, type: 0, color: '#00ffff', scoreValue: 100, growthValue: 1, name: 'CYBER-PULSE' };
+    let foods = [];
     
     // Direction vectors
     let dx = 1;
@@ -1459,8 +1493,8 @@
       pendingGrowth = 0;
     }
 
-    // Spawns retro food item ensuring it doesn't overlap the snake
-    function spawnFood() {
+    // Spawns retro food item ensuring it doesn't overlap the snake or other active foods
+    function spawnFood(index = 0) {
       let overlap = true;
       let rx, ry;
       
@@ -1469,8 +1503,17 @@
         rx = Math.floor(Math.random() * CELL_COUNT);
         ry = Math.floor(Math.random() * CELL_COUNT);
         
+        // Check overlap with snake
         for (let i = 0; i < snake.length; i++) {
           if (snake[i].x === rx && snake[i].y === ry) {
+            overlap = true;
+            break;
+          }
+        }
+
+        // Check overlap with other active foods
+        for (let i = 0; i < foods.length; i++) {
+          if (i !== index && foods[i] && foods[i].x === rx && foods[i].y === ry) {
             overlap = true;
             break;
           }
@@ -1499,13 +1542,13 @@
         color = '#ffe600'; // Glowing yellow
         scoreValue = 250;
         growthValue = 2; // Grows by 2 elements!
-        name = 'WARNING: GOLD-GLITCH INBOUND (+250)';
+        name = 'GOLD-GLITCH';
         
         alertText = "WARNING: GOLD-GLITCH LOCATED (+250)";
         alertTimer = 75;
       }
 
-      food = {
+      const newFood = {
         x: rx,
         y: ry,
         type: type,
@@ -1514,6 +1557,12 @@
         growthValue: growthValue,
         name: name
       };
+
+      if (foods[index] !== undefined) {
+        foods[index] = newFood;
+      } else {
+        foods.push(newFood);
+      }
     }
 
     // Particle Explosion for consumption impact
@@ -1551,8 +1600,8 @@
     }
 
     // Explode helper
-    function createExplosion(x, y, color, count) {
-      const speedMultiplier = food.type === 0 ? 1.0 : food.type === 1 ? 1.35 : 1.8;
+    function createExplosion(x, y, color, count, foodType = 0) {
+      const speedMultiplier = foodType === 0 ? 1.0 : foodType === 1 ? 1.35 : 1.8;
       for (let i = 0; i < count; i++) {
         particles.push(new Particle(x, y, color, speedMultiplier));
       }
@@ -1562,15 +1611,17 @@
     let frameCount = 0;
     
     function drawGame() {
-      // Apply real-time visual screen shake synced to sequencer beats in Stage 4!
-      const isStage4 = (audio.globalLoopCount >= 14);
+      // Apply real-time visual screen shake synced to sequencer beats in Stage 4 and 5!
+      const isStage4 = (audio.globalLoopCount >= 14 && audio.globalLoopCount < 18);
+      const isStage5 = (audio.globalLoopCount >= 18);
       let shakeOffset = { x: 0, y: 0 };
       
-      if (isStage4 && audio.isPlayingMusic) {
-        const heavySteps = [0, 4, 6, 8, 12, 14]; // kicks, snares, claps
+      if ((isStage4 || isStage5) && audio.isPlayingMusic) {
+        const heavySteps = isStage5 ? [0, 2, 4, 6, 8, 10, 12, 14, 15] : [0, 4, 6, 8, 12, 14]; // kicks, snares, claps
         if (heavySteps.includes(audio.currentStep)) {
-          // Shake camera instantly in sync
-          screenShake = Math.max(screenShake, audio.currentStep % 4 === 0 ? 5.5 : 3.8);
+          // Shake camera instantly in sync, make it even wilder in Stage 5 (up to 7.5px)!
+          const maxShake = isStage5 ? 7.5 : (audio.currentStep % 4 === 0 ? 5.5 : 3.8);
+          screenShake = Math.max(screenShake, maxShake);
         }
       }
       
@@ -1591,8 +1642,9 @@
 
       // 2. Draw Retro Glowing Grid lines
       let gridAlpha = 0.06;
-      if (isStage4 && audio.isPlayingMusic) {
-        gridAlpha = 0.06 + (screenShake / 5.5) * 0.12; // pulse grid line glow with beat shake
+      if ((isStage4 || isStage5) && audio.isPlayingMusic) {
+        const maxShakeVal = isStage5 ? 7.5 : 5.5;
+        gridAlpha = 0.06 + (screenShake / maxShakeVal) * 0.18; // pulse grid line glow with beat shake
       }
       ctx.strokeStyle = `rgba(189, 0, 255, ${gridAlpha})`;
       ctx.lineWidth = 1;
@@ -1626,12 +1678,12 @@
         
         if (isHead) {
           ctx.fillStyle = '#ff007f'; // Neon pink head
-          ctx.shadowBlur = isStage4 ? 24 : 15;
+          ctx.shadowBlur = isStage5 ? 30 : (isStage4 ? 24 : 15);
           ctx.shadowColor = '#ff007f';
         } else {
           // Shifting purple/magenta gradient
           ctx.fillStyle = `hsl(${290 + (index * 3) % 40}, 100%, 50%)`;
-          ctx.shadowBlur = isStage4 ? 15 : 8;
+          ctx.shadowBlur = isStage5 ? 18 : (isStage4 ? 15 : 8);
           ctx.shadowColor = '#bd00ff';
         }
 
@@ -1669,101 +1721,103 @@
         ctx.restore();
       });
 
-      // 5. Draw Food (Tier Specific Visual Styling)
+      // 5. Draw Foods (Tier Specific Visual Styling)
       frameCount++;
       const pulse = 1.0 + Math.sin(frameCount * 0.16) * 0.15;
       const fSize = (GRID_SIZE - 6) * pulse;
       
-      const fx = food.x * GRID_SIZE + GRID_SIZE / 2;
-      const fy = food.y * GRID_SIZE + GRID_SIZE / 2;
+      foods.forEach(fItem => {
+        const fx = fItem.x * GRID_SIZE + GRID_SIZE / 2;
+        const fy = fItem.y * GRID_SIZE + GRID_SIZE / 2;
 
-      ctx.save();
-      const foodGlow = isStage4 ? 28 + Math.sin(frameCount * 0.2) * 8 : 18 + Math.sin(frameCount * 0.15) * 4;
-      ctx.shadowBlur = foodGlow;
-      ctx.shadowColor = food.color;
-      ctx.fillStyle = food.color;
+        ctx.save();
+        const foodGlow = isStage5 ? 32 + Math.sin(frameCount * 0.22) * 10 : (isStage4 ? 28 + Math.sin(frameCount * 0.2) * 8 : 18 + Math.sin(frameCount * 0.15) * 4);
+        ctx.shadowBlur = foodGlow;
+        ctx.shadowColor = fItem.color;
+        ctx.fillStyle = fItem.color;
 
-      if (food.type === 0) {
-        // --- COMMON: Rotating Diamond ---
-        ctx.translate(fx, fy);
-        ctx.rotate(frameCount * 0.04);
-        ctx.beginPath();
-        ctx.moveTo(0, -fSize / 2);
-        ctx.lineTo(fSize / 2, 0);
-        ctx.lineTo(0, fSize / 2);
-        ctx.lineTo(-fSize / 2, 0);
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.arc(0, 0, 2, 0, Math.PI * 2);
-        ctx.fill();
-      } 
-      else if (food.type === 1) {
-        // --- RARE: Pulsing Retro Target Star ---
-        ctx.translate(fx, fy);
-        ctx.rotate(-frameCount * 0.03);
-        
-        ctx.beginPath();
-        for (let i = 0; i < 8; i++) {
-          const angle = (i * Math.PI) / 4;
-          const r = i % 2 === 0 ? fSize / 2 : fSize / 4;
-          const sx = Math.cos(angle) * r;
-          const sy = Math.sin(angle) * r;
-          if (i === 0) ctx.moveTo(sx, sy);
-          else ctx.lineTo(sx, sy);
-        }
-        ctx.closePath();
-        ctx.fill();
-
-        // Glowing wire ring
-        ctx.strokeStyle = food.color;
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.arc(0, 0, fSize / 1.7, 0, Math.PI * 2);
-        ctx.stroke();
-
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.arc(0, 0, 3, 0, Math.PI * 2);
-        ctx.fill();
-      } 
-      else {
-        // --- EXCLUSIVE: High-Energy Pulsating Plasma Core ---
-        ctx.translate(fx, fy);
-        ctx.rotate(frameCount * 0.08);
-
-        // Core
-        ctx.beginPath();
-        ctx.arc(0, 0, fSize / 3.5, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Orbiting rings
-        ctx.strokeStyle = food.color;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(0, 0, fSize / 2, 0, Math.PI * 2);
-        ctx.stroke();
-
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.arc(0, 0, fSize / 1.4, 0, Math.PI * 2);
-        ctx.stroke();
-
-        // Sub-orbit satellites
-        ctx.fillStyle = food.color;
-        for (let i = 0; i < 4; i++) {
-          const angle = (i * Math.PI) / 2 + frameCount * 0.05;
-          const nx = Math.cos(angle) * (fSize / 1.4);
-          const ny = Math.sin(angle) * (fSize / 1.4);
+        if (fItem.type === 0) {
+          // --- COMMON: Rotating Diamond ---
+          ctx.translate(fx, fy);
+          ctx.rotate(frameCount * 0.04);
           ctx.beginPath();
-          ctx.arc(nx, ny, 2, 0, Math.PI * 2);
+          ctx.moveTo(0, -fSize / 2);
+          ctx.lineTo(fSize / 2, 0);
+          ctx.lineTo(0, fSize / 2);
+          ctx.lineTo(-fSize / 2, 0);
+          ctx.closePath();
           ctx.fill();
+
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(0, 0, 2, 0, Math.PI * 2);
+          ctx.fill();
+        } 
+        else if (fItem.type === 1) {
+          // --- RARE: Pulsing Retro Target Star ---
+          ctx.translate(fx, fy);
+          ctx.rotate(-frameCount * 0.03);
+          
+          ctx.beginPath();
+          for (let i = 0; i < 8; i++) {
+            const angle = (i * Math.PI) / 4;
+            const r = i % 2 === 0 ? fSize / 2 : fSize / 4;
+            const sx = Math.cos(angle) * r;
+            const sy = Math.sin(angle) * r;
+            if (i === 0) ctx.moveTo(sx, sy);
+            else ctx.lineTo(sx, sy);
+          }
+          ctx.closePath();
+          ctx.fill();
+
+          // Glowing wire ring
+          ctx.strokeStyle = fItem.color;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(0, 0, fSize / 1.7, 0, Math.PI * 2);
+          ctx.stroke();
+
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(0, 0, 3, 0, Math.PI * 2);
+          ctx.fill();
+        } 
+        else {
+          // --- EXCLUSIVE: High-Energy Pulsating Plasma Core ---
+          ctx.translate(fx, fy);
+          ctx.rotate(frameCount * 0.08);
+
+          // Core
+          ctx.beginPath();
+          ctx.arc(0, 0, fSize / 3.5, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Orbiting rings
+          ctx.strokeStyle = fItem.color;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(0, 0, fSize / 2, 0, Math.PI * 2);
+          ctx.stroke();
+
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(0, 0, fSize / 1.4, 0, Math.PI * 2);
+          ctx.stroke();
+
+          // Sub-orbit satellites
+          ctx.fillStyle = fItem.color;
+          for (let i = 0; i < 4; i++) {
+            const angle = (i * Math.PI) / 2 + frameCount * 0.05;
+            const nx = Math.cos(angle) * (fSize / 1.4);
+            const ny = Math.sin(angle) * (fSize / 1.4);
+            ctx.beginPath();
+            ctx.arc(nx, ny, 2, 0, Math.PI * 2);
+            ctx.fill();
+          }
         }
-      }
-      ctx.restore();
+        ctx.restore();
+      });
 
       // Restore camera translation context
       ctx.restore();
@@ -1773,11 +1827,13 @@
         alertTimer--;
         ctx.save();
         ctx.font = '8px "Press Start 2P"';
-        ctx.fillStyle = food.color;
+        ctx.fillStyle = foods[0] ? foods[0].color : '#00ffff';
         
         // Highlight transition alerts
-        if (alertText.includes("STAGE 4")) {
+        if (alertText.includes("STAGE 5")) {
           ctx.fillStyle = "#ff007f"; // Red alert pink
+        } else if (alertText.includes("STAGE 4")) {
+          ctx.fillStyle = "#ff007f"; 
         } else if (alertText.includes("STAGE 3")) {
           ctx.fillStyle = "#ff007f"; 
         } else if (alertText.includes("STAGE 2")) {
@@ -1796,6 +1852,22 @@
         
         ctx.fillText(alertText, canvas.width / 2, canvas.height - 32);
         ctx.restore();
+      }
+
+      // 7. Apply Stage 5 visual play area disintegration (glitch slices)
+      if (isStage5 && audio.isPlayingMusic && Math.random() < 0.28) {
+        const glitchCount = Math.floor(Math.random() * 3) + 1; // up to three glitches at a time!
+        for (let g = 0; g < glitchCount; g++) {
+          const sliceY = Math.floor(Math.random() * canvas.height);
+          const sliceHeight = Math.floor(Math.random() * 45) + 10;
+          const shiftX = (Math.random() - 0.5) * 22; // offset shift left/right
+          
+          ctx.drawImage(
+            canvas,
+            0, sliceY, canvas.width, sliceHeight, // source
+            shiftX, sliceY, canvas.width, sliceHeight // destination
+          );
+        }
       }
     }
 
@@ -1829,16 +1901,26 @@
       snake.unshift(head);
 
       // 6. Eating check
-      if (head.x === food.x && head.y === food.y) {
+      let foodEatenIndex = -1;
+      for (let i = 0; i < foods.length; i++) {
+        if (foods[i] && head.x === foods[i].x && head.y === foods[i].y) {
+          foodEatenIndex = i;
+          break;
+        }
+      }
+
+      if (foodEatenIndex !== -1) {
+        const eatenFood = foods[foodEatenIndex];
+        
         // Play specific SFX Tier
-        audio.playEatSFX(food.type);
+        audio.playEatSFX(eatenFood.type);
         
         // Massive custom explosion particle burst
-        const particleCount = food.type === 0 ? 12 : food.type === 1 ? 25 : 45;
-        createExplosion(food.x, food.y, food.color, particleCount);
+        const particleCount = eatenFood.type === 0 ? 12 : eatenFood.type === 1 ? 25 : 45;
+        createExplosion(eatenFood.x, eatenFood.y, eatenFood.color, particleCount, eatenFood.type);
         
         // Increment Score
-        score += food.scoreValue;
+        score += eatenFood.scoreValue;
         scoreVal.textContent = String(score).padStart(4, '0');
         
         // High Score
@@ -1849,9 +1931,17 @@
         }
 
         // Setup multi-segment pending growth ticks
-        pendingGrowth += food.growthValue;
+        pendingGrowth += eatenFood.growthValue;
 
-        spawnFood();
+        // If in Stage 5, maintain 3 foods. Otherwise standard 1 food behavior.
+        if (audio.globalLoopCount >= 18) {
+          spawnFood(foodEatenIndex);
+        } else {
+          foods.splice(foodEatenIndex, 1);
+          if (foods.length === 0) {
+            spawnFood(0);
+          }
+        }
 
         // Speed ramp scaling
         const speedReduction = Math.floor(score / 100) * 1.5;
@@ -1865,6 +1955,13 @@
           pendingGrowth--;
         } else {
           snake.pop(); // Standard slide motion
+        }
+      }
+
+      // Maintain up to 3 foods on the grid in Stage 5!
+      if (audio.globalLoopCount >= 18 && foods.length < 3) {
+        while (foods.length < 3) {
+          spawnFood(foods.length);
         }
       }
     }
@@ -1938,9 +2035,10 @@
       alertTimer = 0;
       alertText = "";
       screenShake = 0;
+      foods = []; // Clear any previous active foods!
 
       spawnSnake();
-      spawnFood();
+      spawnFood(0);
       
       audio.startMusic();
       
