@@ -530,22 +530,22 @@
     .dpad-middle-row {
       display: flex;
       align-items: center;
-      gap: 32px;
+      gap: 40px;
     }
 
     .dpad-btn {
-      width: 54px;
-      height: 54px;
+      width: 70px;
+      height: 70px;
       background: rgba(13, 2, 17, 0.9);
       border: 3px solid #00ffff;
       color: #00ffff;
       border-radius: 50%;
-      font-size: 18px;
+      font-size: 22px;
       display: flex;
       justify-content: center;
       align-items: center;
       cursor: pointer;
-      box-shadow: 0 0 10px rgba(0, 255, 255, 0.4), inset 0 0 5px rgba(0, 255, 255, 0.2);
+      box-shadow: 0 0 12px rgba(0, 255, 255, 0.45), inset 0 0 6px rgba(0, 255, 255, 0.25);
       transition: all 0.1s ease;
       touch-action: manipulation;
     }
@@ -1217,7 +1217,8 @@
         gain.gain.setValueAtTime(0, time);
         
         const isStage4 = (this.globalLoopCount >= 8 && this.globalLoopCount < 17);
-        const leadVolume = isStage4 ? 0.042 : (isHighIntensity ? 0.09 : 0.08); // scale down to prevent clipping with waveshaper overdrive
+        const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+        const leadVolume = isStage4 ? (isTouch ? 0.075 : 0.042) : (isHighIntensity ? 0.09 : 0.08); // adjust volume on touch since distortion is bypassed
         gain.gain.linearRampToValueAtTime(leadVolume, time + 0.02);
         gain.gain.exponentialRampToValueAtTime(leadVolume * 0.44, time + duration - 0.02);
         gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
@@ -1229,7 +1230,7 @@
         osc2.connect(sawMix);
         sawMix.connect(filter);
 
-        if (isStage4) {
+        if (isStage4 && !isTouch) {
           const shaper = this.ctx.createWaveShaper();
           shaper.curve = this.distortionCurve;
           shaper.oversample = '4x';
@@ -1633,10 +1634,14 @@
           } else if (this.globalLoopCount === 17) {
             alertText = "ALERT: STAGE 9 COSMIC HORIZON // GALAXY DEEP";
             alertTimer = 200;
-            // Restore bright, open audio filter
-            if (this.ctx && this.underwaterFilter) {
-              this.underwaterFilter.frequency.setValueAtTime(this.underwaterFilter.frequency.value, this.ctx.currentTime);
-              this.underwaterFilter.frequency.exponentialRampToValueAtTime(20000, this.ctx.currentTime + 2.0);
+            // Restore bright, open audio filter (safeguarded via try-catch to prevent mobile audio thread lockups)
+            try {
+              if (this.ctx && this.underwaterFilter) {
+                this.underwaterFilter.frequency.setValueAtTime(this.underwaterFilter.frequency.value || 900, this.ctx.currentTime);
+                this.underwaterFilter.frequency.exponentialRampToValueAtTime(20000, this.ctx.currentTime + 2.0);
+              }
+            } catch (err) {
+              console.warn("Cosmic audio filter recovery sweep failed, bypassing to prevent thread halt:", err);
             }
           } else if (this.globalLoopCount === 20) {
             alertText = "ALERT: STAGE 10 DEEP SECTOR // CYBER-OCTOPUS DETECTED";
@@ -1849,18 +1854,27 @@
         if (targetFreq > 0) {
           this.playLead(targetFreq, time, stepDuration * 1.8, isIntensityEngaged);
           
+          const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
           if (this.globalLoopCount >= 17) {
             // Stage 9: Clean celestial soaring lead with clear high chime arpeggios
             this.playLead(targetFreq * 2, time, stepDuration * 1.4, true);     // High Octave arpeggio echo
           } else if (this.globalLoopCount >= 10 && this.globalLoopCount < 17) {
             // Stage 5: Ultra-distorted guitar lead layered in massive three-voice power chords (Octave up, octave down, and perfect fifth!)
-            this.playLead(targetFreq * 2, time, stepDuration * 1.5, true);     // High Octave
-            this.playLead(targetFreq * 1.5, time, stepDuration * 1.6, true);   // Perfect Fifth
-            this.playLead(targetFreq * 0.5, time, stepDuration * 1.8, true);   // Heavy Low Octave chug!
+            if (!isTouch) {
+              this.playLead(targetFreq * 2, time, stepDuration * 1.5, true);     // High Octave
+              this.playLead(targetFreq * 1.5, time, stepDuration * 1.6, true);   // Perfect Fifth
+              this.playLead(targetFreq * 0.5, time, stepDuration * 1.8, true);   // Heavy Low Octave chug!
+            } else {
+              this.playLead(targetFreq * 2, time, stepDuration * 1.5, true);     // High Octave (Single layer keeps CPU extremely low)
+            }
           } else if (this.globalLoopCount >= 8) {
             // Stage 4: Massive soaring synthesized metal POWER CHORDS! (Root + Fifth + Octave)
-            this.playLead(targetFreq * 2, time, stepDuration * 1.5, true);   // Octave
-            this.playLead(targetFreq * 1.5, time, stepDuration * 1.6, true); // Perfect Fifth!
+            if (!isTouch) {
+              this.playLead(targetFreq * 2, time, stepDuration * 1.5, true);   // Octave
+              this.playLead(targetFreq * 1.5, time, stepDuration * 1.6, true); // Perfect Fifth!
+            } else {
+              this.playLead(targetFreq * 2, time, stepDuration * 1.5, true);   // Octave
+            }
           } else if (this.globalLoopCount >= 6) {
             // Stage 3: Octave doubling
             this.playLead(targetFreq * 2, time, stepDuration * 1.5, true);
@@ -1990,10 +2004,16 @@
       // Play 8-bit brown note massive pitch dive powerdown!
       audio.playPowerdownSFX();
       
-      // Muffle all audio elements dynamically over 1.8 seconds
-      if (audio.ctx && audio.underwaterFilter) {
-        audio.underwaterFilter.frequency.setValueAtTime(20000, audio.ctx.currentTime);
-        audio.underwaterFilter.frequency.exponentialRampToValueAtTime(360, audio.ctx.currentTime + 1.8);
+      // Muffle all audio elements dynamically over 1.8 seconds (safeguarded via try-catch to prevent mobile control lockups)
+      try {
+        if (audio.ctx && audio.underwaterFilter) {
+          const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+          const targetFreq = isTouch ? 1200 : 900; // Keep it high enough for mobile phone speakers
+          audio.underwaterFilter.frequency.setValueAtTime(audio.underwaterFilter.frequency.value || 20000, audio.ctx.currentTime);
+          audio.underwaterFilter.frequency.exponentialRampToValueAtTime(targetFreq, audio.ctx.currentTime + 1.8);
+        }
+      } catch (err) {
+        console.warn("Underwater audio filter transition sweep failed, bypassing to prevent thread halt:", err);
       }
       
       // Freeze screen physics ticks for exactly 2 seconds
