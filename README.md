@@ -31,53 +31,38 @@ As you navigate the grid, three distinct tiers of glowing data packets spawn, ac
 
 ## 🎹 Progressive Stage Composition
 
-The cabinet features a dynamic, multi-voice Web Audio API synthesizer sequencer that speeds up and morphs across **10 progressive loops**:
+The cabinet features a dynamic, multi-voice Web Audio API synthesizer sequencer that speeds up and morphs across **8 progressive stages**:
 
-### 🟢 Stage 1: Standard Mode (Loop 0)
-* Syncopated driving bass kick, off-beat hi-hat ticks, soft synth chords, and a catch-phrase melody hook. An atmospheric soaring counter-melody kicks in starting at loop 2.
+### 🟢 Stage 1: Neon Grid (Loop 0)
+* Driving syncopated kick/snare drums, closed hi-hat shuffles, warm plucky chord pads, and a retro lead synth hook. An atmospheric soaring counter-melody enters starting at Loop 2.
 
-### 🟡 Stage 2: High Intensity (Loop 4)
-* Continuous, fast 8th-note clicks. Lowpass bass filter opens wide for a buzzing growl.
+### 🟡 Stage 2: Speed Glide (Loop 4)
+* Hi-hat ticks constant on 8th notes, opening the lowpass bass filter for a resonant growling bass sweep.
 
-### 🟠 Stage 3: Apex Intensity (Loop 6)
-* Hi-hats double to a relentless sixteenth-note closed-hat chug roll. Lead hook is octave-doubled. Bass filter opens completely to `2700Hz` with a roaring boost.
+### 🟠 Stage 3: Apex Chase (Loop 6)
+* Hi-hats double to a relentless sixteenth-note closed-hat roll, while the lead melody is octave-doubled with an extremely bright resonant cutoff filter.
 
-### 🔴 Stage 4: "Headbanger Mode" (Loop 8)
-* Flashing red alert toast. lead melody is driven through overdriven waveshaping curves, detuned flat supersaw bass, 80s arena snare claps, and clicking thump kicks. Grid lines and glowing segments pulse in sync. Camera translation shakes coordinates in sync with kicks/claps.
+### 🔴 Stage 4: Headbanger Overdrive (Loop 8)
+* Massive overdrive waveshaper distortion, detuned chorused saw/triangle chugs, arena snare claps, and screen shakes synced to kicks and claps. Grid lines and visual slices glitch in sync with the beat.
 
-### ⚡ Stage 5: "Core Disintegration" (Loop 10)
-* Cabinet tempo sweep reaches a fast **`130 BPM`**. High-tension, cybernetic staccato soaring pads, E5 note chug lead power-chords, glitching screen slices, and a tight `0.85s` ambient chord envelope limit prevent notes holding too long. Standard 1 food item expands to **3 simultaneous food glitches** on the grid.
+### 🔵 Stage 5: Sub-Aquatic Chasm (Loop 10)
+* **High-Impact Submersion Transition**: Gameplay freezes for 1.5 seconds as a translucent deep blue wave rises with 45 sinusoidal bubble particles. A dual swoosh and pitch-dive sweep runs as audio filters drop to a muffled `900Hz` (submerged).
+* **Caribbean Dub Riddim**: Plays a deep low-passed reggae bassline, offbeat chord skanks with tape delay feedback, rimshot One-Drop drum beats, hi-hat bubble swings, and steel-drum chime fills. standard 1 food item expands to **3 simultaneous food glitches** on the grid.
 
-### 🌀 Stage 6: "Underwater Submersion" (Loop 11)
-* **2-Second Powerdown Freeze**: Game freezes for 2.0s as keyboard controls lock. A massive descending pitch-dive brown note powerdown SFX sweeps oscillators to silence.
-* **Aquatic Lowpass**: Cutoff sweeps to a muffled `360Hz`, drowning the entire audio track.
-* **Aquatic Slowdown**: Resumes at a sluggish `64 BPM` and slow `270ms` game ticks. Eating food slowly ramps speed back up, cap-flooring at `120ms`.
-* Separates 60FPS canvas draw loop from slow physics ticks, rendering blue water filter and horizontal wave ripples.
+### 🦈 Stage 6: Deep Cyber Sharks (Loop 12)
+* **Atmospheric Suspense**: Plays a stripped-down, suspenseful reggae/dub groove (no flute lead) to build deep underwater tension before launch.
+* **Cyber Shark Incursion**: Glowing 2x2 red Cyber Sharks start spawning on the board (lethal footprint) accompanied by a speed-rolling, alternating-semitone Jaws bass alarm.
 
-### 🦈 Stage 7: "Deep Cyber Sharks" (Loop 13)
-* Spawns a glowing yellow-cyan warning banner.
-* A glowing red **2x2 Cyber Shark** swims onto the board, remaining for 3-5 seconds with a 2-6s gap.
-* Alternates a menacing low-bass alternating-semitone **Jaws-reminiscent alarm** (E2 and F2) speed-rolling faster. Bumping into the 2x2 footprint is lethal!
+### 🌌 Stage 7: Cosmic Nebula Horizon (Loop 14)
+* **Space Warp Hyper-Jump Transition**: A dramatic 1.5-second visual and acoustic Space Warp transition (rising white-noise sweeps, square-wave chimes, expanding cyan/purple concentric warp tunnel, and high-frequency camera vibration) freezes physics as the snake leaps into the cosmos.
+* **Distinct Ethereal Space Soundtrack**: Audio tracks transition to a highly distinct, spacey Dorian pad progression (Am9 - D9 - Fmaj7 - G6/9) and a brand new soaring celestial melody hook with gliding arpeggios, perfect-fifth delays, a **fat detuned 3-oscillator analog synth voice** (two detuned saws + one sub-octave fundamental square), and a lush **procedural stereo convolution reverb tail**.
+* **Neon Projectiles**: Cyber Sharks shoot fast neon lasers (2 cells per tick) in cardinal directions. Bullets destroy head hits (Game Over) or shoot other sharks (red self-destruct explosion).
 
-### 💥 Stage 8: "Cyber Shark Swarm" (Loop 15)
-* Glowing red toast warning. Swarms of **up to 3 active sharks** patrol the screen, remaining 5-8 seconds.
-* Alternates twice as loud, detuned **analog dual-supersaw sub-growl Jaws alarms** opening filters to `260Hz` with a high resonance sweep.
-
-### 🌌 Stage 9: "Cosmic Horizon" (Loop 17)
-* Blue subaquatic filters and horizontal wave ripples **fade away smoothly to 0** over 1.5 seconds.
-* Replaced by floating **cyan/purple radial gradient nebulas** and scrolling **parallax space stars**.
-* Master lowpass filter sweeps open back to a crisp **`20000Hz`** over 2 seconds.
-* Ambient pads play slow-attack (`0.9s`) space drones, hats sound like soft sweeping solar wind, and soaring melodies trigger **ascending perfect-fifth double-space echoes** (`frequency * 1.5`).
-* Physics speed returns to a fast, responsive cosmic speed of **115ms per tick** (accelerates faster by `6.5ms` per 100 points, cap-floored at `65ms`).
-* **Shark Lasers**: Cyber-sharks shoot glowing yellow lasers at random 2-7s intervals with synthesized arcade pew/zap pitch sweeps. Lasers travel fast (**2 cells per tick** with 2-step collision checks), passing through tail segments safely, but triggering Game Over on head hits. Bullets destroy other sharks on impact! Enforces at least one shark visible at all times.
-
-### 🐙 Stage 10: "Deep Sector Octopus" (Loop 20)
-* Flashes glowing cyan-green alerts. A friendly but erratic **Cyber-Octopus NPC** spawns, walking slowly once every 3 ticks.
-* **BFS Pathfinding**: Runs a real-time Breadth-First Search (BFS) pathfinder to navigate to the closest unenhanced food, treating snake body segments and 2x2 active sharks as impassable solid walls (waiting in place if blocked).
-* **Expressive Animations**: Renders **8 waving tentacles** animated with sinusoidal wave offsets. Features target cyber-eyes that **automatically track and follow** the closest food item!
-* **Food Upgrades**: If the octopus eats a food, it triggers a synthesized **C5-E5-G5-B5 major arpeggio chime** and golden particles, upgrading the food to a Type 3 **`OCTO-GLITCH`** worth **1000 points**!
-* **Intelligent Bounce**: If the snake runs into the octopus, the snake plays a springy bounce sound, bursts cyan particles, and **instantly redirects left or right** into a safe lane without hitting a wall or its own tail.
-* **Laser Immunity**: The octopus is bulletproof and damage-resistant.
+### 🐙 Stage 8: Deep Sector Octopus (Loop 16)
+* **Cyber-Octopus NPC Spawns**: Renders an animated Cyber-Octopus with 8 waving tentacles and eyes tracking the nearest food, walking slowly once every 3 ticks.
+* **BFS AI Pathfinding**: The octopus runs a Breadth-First Search (BFS) pathfinder to navigate to the closest unenhanced food, treating snake body segments and active 2x2 sharks as impassable walls.
+* **Food Portals**: When the octopus eats a food, it chimes a major arpeggio, upgrading it to a portal worth **1000 points** with custom gold explosion particles.
+* **Intelligent Bounce**: If the snake head bumps into the octopus, the snake plays a springy bounce sound, bursts cyan particles, and **instantly steers** into a safe corridor.
 
 ---
 

@@ -10,6 +10,88 @@
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Press+Start+2P&display=swap" rel="stylesheet">
   
   <style>
+    /* Stage Select Menu Styling */
+    .stage-select-menu {
+      position: absolute;
+      top: 15px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(20, 2, 32, 0.9);
+      border: 2px solid #ff007f;
+      border-radius: 8px;
+      padding: 12px 18px;
+      z-index: 100;
+      box-shadow: 0 0 15px rgba(255, 0, 127, 0.6), inset 0 0 8px rgba(255, 0, 127, 0.4);
+      text-align: center;
+      transition: all 0.3s ease;
+      font-family: 'Press Start 2P', monospace;
+      width: 80%;
+      max-width: 380px;
+    }
+
+    .stage-select-menu.menu-hidden {
+      display: none !important;
+    }
+
+    .stage-select-menu.menu-immutable {
+      border-color: #555 !important;
+      box-shadow: 0 0 10px rgba(80, 80, 80, 0.3) !important;
+      opacity: 0.7;
+    }
+
+    .select-title {
+      font-size: 10px;
+      color: #ff007f;
+      margin-bottom: 8px;
+      text-shadow: 0 0 5px rgba(255, 0, 127, 0.8);
+    }
+    
+    .stage-select-menu.menu-immutable .select-title {
+      color: #777 !important;
+      text-shadow: none !important;
+    }
+
+    .select-retro {
+      background: #0d0211;
+      border: 1px solid #00ffff;
+      color: #00ffff;
+      font-family: 'Press Start 2P', monospace;
+      font-size: 8px;
+      padding: 8px;
+      width: 100%;
+      border-radius: 4px;
+      outline: none;
+      cursor: pointer;
+      box-shadow: 0 0 8px rgba(0, 255, 255, 0.3);
+      transition: border-color 0.2s;
+    }
+
+    .select-retro:focus {
+      border-color: #ff007f;
+      box-shadow: 0 0 8px rgba(255, 0, 127, 0.4);
+    }
+
+    .select-retro:disabled {
+      border-color: #555 !important;
+      color: #777 !important;
+      background: #111 !important;
+      cursor: not-allowed;
+      box-shadow: none !important;
+    }
+
+    .select-footer {
+      font-size: 6px;
+      color: #ffe600;
+      margin-top: 8px;
+      letter-spacing: 1px;
+      text-shadow: 0 0 3px rgba(255, 230, 0, 0.5);
+    }
+    
+    .stage-select-menu.menu-immutable .select-footer {
+      color: #555 !important;
+      text-shadow: none !important;
+    }
+
     /* Reset and Base Styles */
     * {
       box-sizing: border-box;
@@ -571,6 +653,24 @@
 
     /* Media query for screens under 768px */
     @media (max-width: 768px) {
+      .stage-select-menu {
+        width: 90% !important;
+        padding: 8px 12px !important;
+        top: 8px !important;
+      }
+      .select-title {
+        font-size: 8px !important;
+        margin-bottom: 4px !important;
+      }
+      .select-retro {
+        font-size: 6px !important;
+        padding: 5px !important;
+      }
+      .select-footer {
+        font-size: 5px !important;
+        margin-top: 4px !important;
+      }
+
       body {
         overflow-y: auto;
         height: auto;
@@ -775,6 +875,22 @@
           <div class="footer-credit mobile-only">TAP PLAY AGAIN TO REINITIALIZE</div>
         </div>
 
+        <!-- Stage Select Menu Overlay -->
+        <div id="stageSelectMenu" class="stage-select-menu menu-hidden">
+          <div class="select-title">STAGE SELECT DECK</div>
+          <select id="startStageSelect" class="select-retro">
+            <option value="0">STAGE 1: NEON GRID (LOOP 0)</option>
+            <option value="4">STAGE 2: SPEED GLIDE (LOOP 4)</option>
+            <option value="6">STAGE 3: APEX CHASE (LOOP 6)</option>
+            <option value="8">STAGE 4: HEADBANGER OVERDRIVE (LOOP 8)</option>
+            <option value="10">STAGE 5: SUB-AQUATIC CHASM (LOOP 10)</option>
+            <option value="12">STAGE 6: DEEP CYBER SHARKS (LOOP 12)</option>
+            <option value="14">STAGE 7: COSMIC NEBULA HORIZON (LOOP 14)</option>
+            <option value="16">STAGE 8: DEEP SECTOR OCTOPUS (LOOP 16)</option>
+          </select>
+          <div class="select-footer">PRESS ` OR ~ TO TOGGLE DECK</div>
+        </div>
+
         <!-- HTML5 Canvas for the Game -->
         <canvas id="gameCanvas" width="600" height="600"></canvas>
 
@@ -801,6 +917,8 @@
         this.ctx = null;
         this.masterVolume = null;
         this.isMuted = false;
+        this.reverbNode = null;
+        this.reverbGain = null;
         
         // Sequencer variables
         this.schedulerTimerId = null;
@@ -885,8 +1003,32 @@
         this.underwaterFilter.type = 'lowpass';
         this.underwaterFilter.frequency.setValueAtTime(20000, this.ctx.currentTime); // Default fully open
         
-        this.masterVolume.connect(this.underwaterFilter);
-        this.underwaterFilter.connect(this.ctx.destination);
+        // Connect muffled elements to underwaterFilter, which routes to masterVolume, which goes to destination
+        this.underwaterFilter.connect(this.masterVolume);
+        this.masterVolume.connect(this.ctx.destination);
+
+        // Setup gorgeous stereo convolution reverb for cosmic space leads
+        this.reverbNode = this.createReverbNode();
+        this.reverbGain = this.ctx.createGain();
+        this.reverbGain.gain.setValueAtTime(0.32, this.ctx.currentTime); // 32% wet level for spacious tail
+        this.reverbNode.connect(this.reverbGain);
+        this.reverbGain.connect(this.masterVolume);
+      }
+
+      createReverbNode() {
+        if (!this.ctx) return null;
+        const rate = this.ctx.sampleRate;
+        const len = rate * 2.0; // 2 seconds decay time
+        const reverbBuffer = this.ctx.createBuffer(2, len, rate);
+        for (let channel = 0; channel < 2; channel++) {
+          const data = reverbBuffer.getChannelData(channel);
+          for (let i = 0; i < len; i++) {
+            data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.5);
+          }
+        }
+        const convolver = this.ctx.createConvolver();
+        convolver.buffer = reverbBuffer;
+        return convolver;
       }
 
       setMute(mute) {
@@ -897,7 +1039,7 @@
         this.masterVolume.gain.linearRampToValueAtTime(targetVolume, this.ctx.currentTime + 0.1);
       }
 
-      startMusic() {
+      startMusic(startLoop = 0) {
         this.init();
         if (this.ctx.state === 'suspended') {
           this.ctx.resume();
@@ -908,10 +1050,16 @@
         this.nextNoteTime = this.ctx.currentTime;
         this.currentStep = 0;
         this.globalStep = 0;
-        this.globalLoopCount = 0;
+        this.globalLoopCount = startLoop;
         this.tempo = 126; // Reset tempo to default!
         if (this.underwaterFilter) {
-          this.underwaterFilter.frequency.setValueAtTime(20000, this.ctx.currentTime);
+          if (startLoop >= 10 && startLoop < 16) {
+            const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+            const targetFreq = isTouch ? 1200 : 900;
+            this.underwaterFilter.frequency.setValueAtTime(targetFreq, this.ctx.currentTime);
+          } else {
+            this.underwaterFilter.frequency.setValueAtTime(20000, this.ctx.currentTime);
+          }
         }
         this.currentPatternIndex = Math.floor(Math.random() * this.highMelodyPatterns.length);
         this.consecutivePatternCount = 1;
@@ -935,9 +1083,9 @@
         const gain = this.ctx.createGain();
         
         osc.connect(gain);
-        gain.connect(this.masterVolume);
+        gain.connect(this.underwaterFilter);
         
-        const isStage4 = (this.globalLoopCount >= 14);
+        const isStage4 = (this.globalLoopCount >= 8);
         const startFreq = isStage4 ? 180 : 140;
         const endFreq = isStage4 ? 35 : 40;
         const sweepDuration = isStage4 ? 0.08 : 0.12;
@@ -957,7 +1105,7 @@
       playSnare(time, volumeMultiplier = 1.0) {
         if (!this.ctx || this.isMuted) return;
 
-        const isStage4 = (this.globalLoopCount >= 14);
+        const isStage4 = (this.globalLoopCount >= 8);
         const noiseDecay = isStage4 ? 0.22 : 0.14;
         const bandpassFreq = isStage4 ? 900 : 1100;
         const filterQ = isStage4 ? 1.5 : 2.0;
@@ -984,7 +1132,7 @@
 
         noiseNode.connect(filter);
         filter.connect(gain);
-        gain.connect(this.masterVolume);
+        gain.connect(this.underwaterFilter);
 
         // Sub-snare pop node
         const pop = this.ctx.createOscillator();
@@ -995,7 +1143,7 @@
         popGain.gain.exponentialRampToValueAtTime(0.01, time + 0.08);
         
         pop.connect(popGain);
-        popGain.connect(this.masterVolume);
+        popGain.connect(this.underwaterFilter);
 
         noiseNode.start(time);
         noiseNode.stop(time + noiseDecay);
@@ -1036,27 +1184,42 @@
         noiseNode.stop(time + duration);
       }
 
-      // 4. Driving Bassline (Galloping Bass. Supports Stage 2, 3, and 4 sweeps)
       playBass(freq, time, duration, globalLoopCount = 0) {
         if (!this.ctx || this.isMuted) return;
+
+        const isSubmerged = (globalLoopCount >= 10 && globalLoopCount < 14);
 
         const osc1 = this.ctx.createOscillator();
         const osc2 = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
         const filter = this.ctx.createBiquadFilter();
 
-        osc1.type = 'sawtooth';
-        osc1.frequency.setValueAtTime(freq, time);
-        
-        osc2.type = 'triangle';
-        osc2.frequency.setValueAtTime(freq / 2, time);
+        if (isSubmerged) {
+          // Warm dub sub-bass: Pure low-passed triangle + sine waves
+          osc1.type = 'triangle';
+          osc1.frequency.setValueAtTime(freq, time);
+          
+          osc2.type = 'sine';
+          osc2.frequency.setValueAtTime(freq, time); // same frequency for robust fundamentals
+        } else {
+          osc1.type = 'sawtooth';
+          osc1.frequency.setValueAtTime(freq, time);
+          
+          osc2.type = 'triangle';
+          osc2.frequency.setValueAtTime(freq / 2, time);
+        }
 
-        // Stage 4 & 5 detuned supersaw helper oscillator
+        // Stage 4 & 7 detuned supersaw helper oscillators
         let osc3 = null;
-        if (globalLoopCount >= 10) {
+        let osc4 = null;
+        if (globalLoopCount >= 14) {
           osc3 = this.ctx.createOscillator();
           osc3.type = 'sawtooth';
-          osc3.frequency.setValueAtTime(freq + 4, time); // Stage 5: detuned chorus sweep sharp
+          osc3.frequency.setValueAtTime(freq + 4.5, time); // Stage 7+: chorus sharp detune
+          
+          osc4 = this.ctx.createOscillator();
+          osc4.type = 'sawtooth';
+          osc4.frequency.setValueAtTime(freq - 4.5, time); // Stage 7+: chorus flat detune
         } else if (globalLoopCount >= 8) {
           osc3 = this.ctx.createOscillator();
           osc3.type = 'sawtooth';
@@ -1068,7 +1231,12 @@
         let endCutoff = 1100;
         let filterQ = 1.0;
         
-        if (globalLoopCount >= 10) { // Stage 5: Extreme Resonant Acid Squelch Growl!
+        if (isSubmerged) {
+          // Deep low-passed sub-bass: No high-end squeak, just rich warm pressure
+          startCutoff = 130;
+          endCutoff = 220;
+          filterQ = 1.0;
+        } else if (globalLoopCount >= 14) { // Cosmic Space: Extreme Resonant Acid Squelch Growl!
           startCutoff = 800;
           endCutoff = 3500;
           filterQ = 6.0;
@@ -1088,10 +1256,10 @@
         filter.type = 'lowpass';
         filter.frequency.setValueAtTime(startCutoff, time);
         filter.frequency.exponentialRampToValueAtTime(endCutoff, time + 0.05);
-        filter.frequency.exponentialRampToValueAtTime(150, time + duration);
+        filter.frequency.exponentialRampToValueAtTime(70, time + duration);
         filter.Q.setValueAtTime(filterQ, time);
 
-        const gainLevel = globalLoopCount >= 10 ? 1.05 : globalLoopCount >= 8 ? 0.95 : globalLoopCount >= 6 ? 0.90 : globalLoopCount >= 4 ? 0.82 : 0.75;
+        const gainLevel = isSubmerged ? 2.1 : (globalLoopCount >= 14 ? 1.05 : globalLoopCount >= 8 ? 0.95 : globalLoopCount >= 6 ? 0.90 : globalLoopCount >= 4 ? 0.82 : 0.75);
         gain.gain.setValueAtTime(gainLevel, time); 
         gain.gain.exponentialRampToValueAtTime(0.01, time + duration);
 
@@ -1100,13 +1268,19 @@
         if (osc3) {
           osc3.connect(filter);
         }
+        if (osc4) {
+          osc4.connect(filter);
+        }
         filter.connect(gain);
-        gain.connect(this.masterVolume);
+        gain.connect(this.underwaterFilter);
 
         osc1.start(time);
         osc2.start(time);
         if (osc3) {
           osc3.start(time);
+        }
+        if (osc4) {
+          osc4.start(time);
         }
         
         osc1.stop(time + duration);
@@ -1114,15 +1288,102 @@
         if (osc3) {
           osc3.stop(time + duration);
         }
+        if (osc4) {
+          osc4.stop(time + duration);
+        }
+      }
+
+      // Play a single-note plucky synth voice (Triangle + Saw mix with resonant lowpass sweep)
+      playPluck(freq, time, duration) {
+        if (!this.ctx || this.isMuted) return;
+        
+        const osc1 = this.ctx.createOscillator();
+        const osc2 = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        const filter = this.ctx.createBiquadFilter();
+        
+        osc1.type = 'triangle';
+        osc1.frequency.setValueAtTime(freq, time);
+        
+        osc2.type = 'sawtooth';
+        osc2.frequency.setValueAtTime(freq, time);
+        
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(1500, time);
+        filter.frequency.exponentialRampToValueAtTime(400, time + duration);
+        filter.Q.setValueAtTime(3.0, time);
+        
+        gain.gain.setValueAtTime(0, time);
+        gain.gain.linearRampToValueAtTime(0.72, time + 0.015); // solid volume pluck
+        gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+        
+        osc1.connect(filter);
+        
+        const sawMix = this.ctx.createGain();
+        sawMix.gain.setValueAtTime(0.18, time);
+        osc2.connect(sawMix);
+        sawMix.connect(filter);
+        
+        filter.connect(gain);
+        gain.connect(this.underwaterFilter);
+        
+        osc1.start(time);
+        osc2.start(time);
+        osc1.stop(time + duration);
+        osc2.stop(time + duration);
+      }
+
+      // playFlute: Deeply expressive, organic breathy flute voice with 6Hz vibrato LFO and lowpass filter
+      playFlute(freq, time, duration, volumeMultiplier = 1.0) {
+        if (!this.ctx || this.isMuted) return;
+
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        const filter = this.ctx.createBiquadFilter();
+
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq * 0.94, time); // glide up from a semitone below (breath/lip slur appoggiatura)
+        osc.frequency.exponentialRampToValueAtTime(freq, time + 0.05);
+
+        // 6.2Hz vibrato LFO for realistic organic breath flutter
+        const vibrato = this.ctx.createOscillator();
+        const vibratoGain = this.ctx.createGain();
+        vibrato.frequency.setValueAtTime(6.2, time);
+        vibratoGain.gain.setValueAtTime(3.8, time); // vibrato depth (detunes pitch slightly)
+        vibrato.connect(vibratoGain);
+        vibratoGain.connect(osc.frequency);
+        vibrato.start(time);
+        vibrato.stop(time + duration);
+
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(1600, time);
+        filter.Q.setValueAtTime(1.0, time);
+
+        // Flute attack/decay envelope: smooth 80ms attack, scaled by volumeMultiplier
+        const peakVolume = 0.24 * volumeMultiplier;
+        gain.gain.setValueAtTime(0, time);
+        gain.gain.linearRampToValueAtTime(peakVolume, time + 0.08); 
+        gain.gain.setValueAtTime(peakVolume, time + duration - 0.1);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.underwaterFilter);
+
+        osc.start(time);
+        osc.stop(time + duration);
       }
 
       // 5. Warm, Softer Synth Chords (Warm plucked triangle waves)
       playSoftChord(chordFreqs, time, duration, globalLoopCount = 0) {
         if (!this.ctx || this.isMuted) return;
 
+        const isSubmerged = (globalLoopCount >= 10 && globalLoopCount < 14);
+        const peakGain = isSubmerged ? 0.16 : 0.08; // Louder chops in Stage 5/6!
+
         const chordGain = this.ctx.createGain();
         chordGain.gain.setValueAtTime(0, time);
-        chordGain.gain.linearRampToValueAtTime(0.08, time + 0.035); 
+        chordGain.gain.linearRampToValueAtTime(peakGain, time + 0.035); 
         chordGain.gain.exponentialRampToValueAtTime(0.001, time + duration);
 
         // Open up chords filter cutoff based on stages
@@ -1145,14 +1406,12 @@
         });
 
         filter.connect(chordGain);
-        chordGain.connect(this.masterVolume);
+        chordGain.connect(this.underwaterFilter);
       }
 
       // 6. Ambient Chord Pad (Chords wash)
       playPad(chordFreqs, time, duration, globalLoopCount = 0) {
         if (!this.ctx || this.isMuted) return;
-
-        const isStage5 = (globalLoopCount >= 10 && globalLoopCount < 11);
 
         chordFreqs.forEach(freq => {
           const osc = this.ctx.createOscillator();
@@ -1162,19 +1421,26 @@
           osc.type = 'triangle';
           osc.frequency.setValueAtTime(freq, time);
 
+          const isSubmerged = (globalLoopCount >= 10 && globalLoopCount < 14);
           filter.type = 'lowpass';
-          filter.frequency.setValueAtTime(globalLoopCount >= 17 ? 680 : (isStage5 ? 850 : 500), time); // space lowpass setting
+          let padCutoff = 500;
+          if (globalLoopCount >= 14) {
+            padCutoff = 680;
+          } else if (isSubmerged) {
+            padCutoff = 320; // deeply warm and submerged
+          }
+          filter.frequency.setValueAtTime(padCutoff, time);
 
           gain.gain.setValueAtTime(0, time);
-          if (isStage5) {
-            // Short chord pad: fade in quickly, hold, and fade out before 1 second
-            gain.gain.linearRampToValueAtTime(0.08, time + 0.12); 
-            gain.gain.setValueAtTime(0.08, time + duration - 0.15);
-            gain.gain.linearRampToValueAtTime(0.001, time + duration);
-          } else if (globalLoopCount >= 17) {
-            // Stage 9: Slow-attack, long-decay space drone (0.9s attack)
+          if (globalLoopCount >= 14) {
+            // Stage 7: Slow-attack, long-decay space drone (0.9s attack)
             gain.gain.linearRampToValueAtTime(0.085, time + 0.90);
             gain.gain.setValueAtTime(0.085, time + duration - 0.35);
+            gain.gain.linearRampToValueAtTime(0.001, time + duration);
+          } else if (isSubmerged) {
+            // Stage 5/6: Very slow attack, warm sub-aquatic ambient pad (1.4s attack, boosted volume)
+            gain.gain.linearRampToValueAtTime(0.14, time + 1.4);
+            gain.gain.setValueAtTime(0.14, time + duration - 0.5);
             gain.gain.linearRampToValueAtTime(0.001, time + duration);
           } else {
             gain.gain.linearRampToValueAtTime(0.1, time + 0.5); 
@@ -1184,7 +1450,7 @@
 
           osc.connect(filter);
           filter.connect(gain);
-          gain.connect(this.masterVolume);
+          gain.connect(this.underwaterFilter);
 
           osc.start(time);
           osc.stop(time + duration);
@@ -1195,41 +1461,93 @@
       playLead(freq, time, duration, isHighIntensity = false) {
         if (!this.ctx || this.isMuted) return;
 
+        const isCosmic = (this.globalLoopCount >= 14);
+        const isStage4 = (this.globalLoopCount >= 8 && this.globalLoopCount < 14);
+        const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+
         const osc1 = this.ctx.createOscillator();
         const osc2 = this.ctx.createOscillator();
+        let osc3 = null; // Used for fat three-oscillator stack in cosmic stages
+        
         const gain = this.ctx.createGain();
         const filter = this.ctx.createBiquadFilter();
 
-        osc1.type = 'triangle';
-        osc1.frequency.setValueAtTime(freq, time);
+        if (isCosmic) {
+          // SUPER FAT 3-OSCILLATOR SYNTH STACK (Sawtooth + Sawtooth + Square)
+          // Wide detuned sawtooth oscillators (+/- 8 cents) + sub-octave fundamental square
+          osc1.type = 'sawtooth';
+          osc1.frequency.setValueAtTime(freq * Math.pow(2, -8 / 1200), time); // detuned down
 
-        osc2.type = 'sawtooth';
-        osc2.frequency.setValueAtTime(freq + 2, time);
+          osc2.type = 'sawtooth';
+          osc2.frequency.setValueAtTime(freq * Math.pow(2, 8 / 1200), time);  // detuned up
 
-        const startCutoff = isHighIntensity ? 950 : 750;
-        const endCutoff = isHighIntensity ? 2800 : 2200;
+          osc3 = this.ctx.createOscillator();
+          osc3.type = 'square';
+          osc3.frequency.setValueAtTime(freq * 0.5, time); // fat sub-octave square!
+        } else {
+          osc1.type = 'triangle';
+          osc1.frequency.setValueAtTime(freq, time);
+
+          osc2.type = 'sawtooth';
+          osc2.frequency.setValueAtTime(freq + 2, time);
+        }
+
+        // Set up cutoff filters
+        let startCutoff = isHighIntensity ? 950 : 750;
+        let endCutoff = isHighIntensity ? 2800 : 2200;
+        if (isCosmic) {
+          startCutoff = 1800; // Open filter wider for fat rich harmonics
+          endCutoff = 3800;
+        }
 
         filter.type = 'lowpass';
         filter.frequency.setValueAtTime(startCutoff, time);
         filter.frequency.exponentialRampToValueAtTime(endCutoff, time + 0.04);
-        filter.frequency.exponentialRampToValueAtTime(550, time + duration);
+        if (isCosmic) {
+          filter.frequency.exponentialRampToValueAtTime(1200, time + duration); // slow, warm filter envelope sweep
+        } else {
+          filter.frequency.exponentialRampToValueAtTime(550, time + duration);
+        }
 
-        gain.gain.setValueAtTime(0, time);
+        // Calculate volumes
+        let leadVolume = isStage4 ? (isTouch ? 0.075 : 0.042) : (isHighIntensity ? 0.09 : 0.08);
+        if (isCosmic) {
+          leadVolume = isTouch ? 0.095 : 0.065; // Balanced for three oscillators
+        }
         
-        const isStage4 = (this.globalLoopCount >= 8 && this.globalLoopCount < 17);
-        const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-        const leadVolume = isStage4 ? (isTouch ? 0.075 : 0.042) : (isHighIntensity ? 0.09 : 0.08); // adjust volume on touch since distortion is bypassed
+        gain.gain.setValueAtTime(0, time);
         gain.gain.linearRampToValueAtTime(leadVolume, time + 0.02);
         gain.gain.exponentialRampToValueAtTime(leadVolume * 0.44, time + duration - 0.02);
         gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
 
-        osc1.connect(filter);
-        
-        const sawMix = this.ctx.createGain();
-        sawMix.gain.setValueAtTime(0.12, time);
-        osc2.connect(sawMix);
-        sawMix.connect(filter);
+        // Connect oscillators
+        if (isCosmic) {
+          // Connect detuned saws directly to filter
+          const sawMix1 = this.ctx.createGain();
+          sawMix1.gain.setValueAtTime(0.12, time);
+          osc1.connect(sawMix1);
+          sawMix1.connect(filter);
 
+          const sawMix2 = this.ctx.createGain();
+          sawMix2.gain.setValueAtTime(0.12, time);
+          osc2.connect(sawMix2);
+          sawMix2.connect(filter);
+
+          // Connect sub-square to filter at lower volume to glue the low end together
+          const subMix = this.ctx.createGain();
+          subMix.gain.setValueAtTime(0.08, time);
+          osc3.connect(subMix);
+          subMix.connect(filter);
+        } else {
+          osc1.connect(filter);
+          
+          const sawMix = this.ctx.createGain();
+          sawMix.gain.setValueAtTime(0.12, time);
+          osc2.connect(sawMix);
+          sawMix.connect(filter);
+        }
+
+        // Route filter to output gain (and distortion if Stage 4)
         if (isStage4 && !isTouch) {
           const shaper = this.ctx.createWaveShaper();
           shaper.curve = this.distortionCurve;
@@ -1240,12 +1558,23 @@
           filter.connect(gain);
         }
         
-        gain.connect(this.masterVolume);
+        // Route main gain to output dry signal
+        gain.connect(this.underwaterFilter);
 
+        // Route to wet space reverb if in cosmic stages!
+        if (isCosmic && this.reverbNode) {
+          gain.connect(this.reverbNode);
+        }
+
+        // Start/Stop oscillators
         osc1.start(time);
         osc2.start(time);
         osc1.stop(time + duration);
         osc2.stop(time + duration);
+        if (isCosmic && osc3) {
+          osc3.start(time);
+          osc3.stop(time + duration);
+        }
       }
 
       // 8. Soaring Space Counter-Melody Synth (Sine voice flying high above)
@@ -1282,13 +1611,184 @@
 
         osc.connect(filter);
         filter.connect(gain);
-        gain.connect(this.masterVolume);
+        gain.connect(this.underwaterFilter);
 
         lfo.start(time);
         osc.start(time);
         
         lfo.stop(time + duration);
         osc.stop(time + duration);
+      }
+
+      // Play custom submerge sound fx
+      playSubmergeSFX() {
+        this.init();
+        if (!this.ctx || this.isMuted) return;
+        const now = this.ctx.currentTime;
+        const duration = 1.6;
+        
+        // 1. Noise Splash
+        const bufferSize = this.ctx.sampleRate * duration;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+        
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buffer;
+        
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.Q.value = 5.0;
+        filter.frequency.setValueAtTime(1800, now);
+        filter.frequency.exponentialRampToValueAtTime(180, now + duration);
+        
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0.35, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+        
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.masterVolume);
+        
+        // 2. Low Frequency Bubble Swoosh
+        const osc = this.ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(150, now);
+        osc.frequency.linearRampToValueAtTime(50, now + duration);
+        
+        const oscGain = this.ctx.createGain();
+        oscGain.gain.setValueAtTime(0.5, now);
+        oscGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+        
+        osc.connect(oscGain);
+        oscGain.connect(this.masterVolume);
+        
+        noise.start(now);
+        noise.stop(now + duration);
+        osc.start(now);
+        osc.stop(now + duration);
+      }
+
+      // Play custom space warp sound fx
+      playSpaceWarpSFX() {
+        this.init();
+        if (!this.ctx || this.isMuted) return;
+        const now = this.ctx.currentTime;
+        const duration = 1.6;
+        
+        // 1. Noise Swoosh (Highpass sweep representing rushing through stars)
+        const bufferSize = this.ctx.sampleRate * duration;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+        
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buffer;
+        
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'highpass';
+        filter.Q.value = 8.0;
+        filter.frequency.setValueAtTime(250, now);
+        filter.frequency.exponentialRampToValueAtTime(8500, now + duration);
+        
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0.28, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+        
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.masterVolume);
+        
+        // 2. Exponential square-wave synth warp chime swoop
+        const osc = this.ctx.createOscillator();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(180, now);
+        osc.frequency.exponentialRampToValueAtTime(3500, now + duration);
+        
+        const oscFilter = this.ctx.createBiquadFilter();
+        oscFilter.type = 'lowpass';
+        oscFilter.Q.value = 6.0;
+        oscFilter.frequency.setValueAtTime(300, now);
+        oscFilter.frequency.exponentialRampToValueAtTime(4500, now + duration);
+        
+        const oscGain = this.ctx.createGain();
+        oscGain.gain.setValueAtTime(0.12, now);
+        oscGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+        
+        osc.connect(oscFilter);
+        oscFilter.connect(oscGain);
+        oscGain.connect(this.masterVolume);
+        
+        // 3. Cybernetic bell sweep (sine wave running at frequency * 1.5)
+        const osc2 = this.ctx.createOscillator();
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(270, now);
+        osc2.frequency.exponentialRampToValueAtTime(5250, now + duration);
+        
+        const osc2Gain = this.ctx.createGain();
+        osc2Gain.gain.setValueAtTime(0.18, now);
+        osc2Gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+        
+        osc2.connect(osc2Gain);
+        osc2Gain.connect(this.masterVolume);
+        
+        noise.start(now);
+        noise.stop(now + duration);
+        osc.start(now);
+        osc.stop(now + duration);
+        osc2.start(now);
+        osc2.stop(now + duration);
+      }
+
+      // Play synthesized finger snap fx
+      playSnap(time) {
+        if (!this.ctx || this.isMuted) return;
+        
+        // Snap acoustics: bandpass filtered white noise with snappy high-impact gain
+        const bufferSize = this.ctx.sampleRate * 0.15;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+        
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buffer;
+        
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(1200, time); // slightly higher snap peak
+        filter.Q.setValueAtTime(2.0, time); // wider bandpass for fuller sound
+        
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(1.85, time); // massive gain boost!
+        gain.gain.exponentialRampToValueAtTime(0.001, time + 0.09); // slightly longer decay for presence
+        
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.masterVolume);
+        
+        // Sharp transient impact pop
+        const pop = this.ctx.createOscillator();
+        pop.type = 'triangle'; // triangle has fuller body than sine for the click impact
+        pop.frequency.setValueAtTime(1400, time);
+        pop.frequency.exponentialRampToValueAtTime(600, time + 0.025);
+        
+        const popGain = this.ctx.createGain();
+        popGain.gain.setValueAtTime(0.65, time); // boost click volume
+        popGain.gain.exponentialRampToValueAtTime(0.001, time + 0.025);
+        
+        pop.connect(popGain);
+        popGain.connect(this.masterVolume);
+        
+        noise.start(time);
+        noise.stop(time + 0.15);
+        pop.start(time);
+        pop.stop(time + 0.03);
       }
 
       // 9. Advanced 8-Bit Eating SFX Tiers
@@ -1456,16 +1956,16 @@
       }
 
       // 12. Ominous Jaws-themed cybernetic alternating-semitone low bass sweep
-      playSharkSFX(isStage8 = false) {
+      playSharkSFX(isStage7 = false) {
         this.init();
         if (!this.ctx || this.isMuted) return;
         const now = this.ctx.currentTime;
         
         // Jaws pattern: low rumbling E2 and F2 alternating, speeding up!
-        const intervals = isStage8 
-          ? [0.0, 0.35, 0.65, 0.90, 1.10, 1.25, 1.40, 1.50] // Stage 8: faster, more notes for extreme prominence!
+        const intervals = isStage7 
+          ? [0.0, 0.35, 0.65, 0.90, 1.10, 1.25, 1.40, 1.50] // Stage 7: faster, more notes for extreme prominence!
           : [0.0, 0.45, 0.85, 1.20, 1.50, 1.75]; 
-        const freqs = isStage8
+        const freqs = isStage7
           ? [82.41, 87.31, 82.41, 87.31, 82.41, 87.31, 82.41, 87.31]
           : [82.41, 87.31, 82.41, 87.31, 82.41, 87.31]; 
         
@@ -1474,7 +1974,7 @@
           const freq = freqs[idx];
           
           const osc1 = this.ctx.createOscillator();
-          const osc2 = isStage8 ? this.ctx.createOscillator() : null; // Stage 8: detuned dual supersaw sub-growl!
+          const osc2 = isStage7 ? this.ctx.createOscillator() : null; // Stage 7: detuned dual supersaw sub-growl!
           const gain = this.ctx.createGain();
           const filter = this.ctx.createBiquadFilter();
           
@@ -1487,13 +1987,13 @@
           }
           
           filter.type = 'lowpass';
-          filter.frequency.setValueAtTime(isStage8 ? 260 : 150, triggerTime); // Stage 8: opens up cutoff for massive buzzy presence!
-          filter.Q.setValueAtTime(isStage8 ? 4.0 : 1.0, triggerTime);
+          filter.frequency.setValueAtTime(isStage7 ? 260 : 150, triggerTime); // Stage 7: opens up cutoff for massive buzzy presence!
+          filter.Q.setValueAtTime(isStage7 ? 4.0 : 1.0, triggerTime);
           
           gain.gain.setValueAtTime(0, triggerTime);
-          const maxGain = isStage8 ? 1.4 : 0.7; // Stage 8: twice as loud!
+          const maxGain = isStage7 ? 1.4 : 0.7; // Stage 7: twice as loud!
           gain.gain.linearRampToValueAtTime(maxGain, triggerTime + 0.08); 
-          gain.gain.exponentialRampToValueAtTime(0.001, triggerTime + (isStage8 ? 0.45 : 0.35));
+          gain.gain.exponentialRampToValueAtTime(0.001, triggerTime + (isStage7 ? 0.45 : 0.35));
           
           osc1.connect(filter);
           if (osc2) {
@@ -1605,7 +2105,7 @@
         if (this.globalStep === 0 && lastGlobalStep === 63) {
           this.globalLoopCount++; 
           
-          // Trigger Stage warning alerts (Stage 2 at 4 loops, Stage 3 at 6 loops, Stage 4 at 8 loops, Stage 5 at 10 loops, Stage 6 at 11 loops, Stage 7 at 13 loops)
+          // Trigger Stage warning alerts (Stage 2 at 4 loops, Stage 3 at 6 loops, Stage 4 at 8 loops, Stage 5 at 10 loops, Stage 6 at 12 loops, Stage 7 at 14 loops, Stage 8 at 16 loops)
           if (this.globalLoopCount === 4) {
             alertText = "ALERT: STAGE 2 INTENSITY ENGAGED";
             alertTimer = 110;
@@ -1616,24 +2116,21 @@
             alertText = "CRITICAL: STAGE 4 APEX CHUG // HEADBANG MODE ENGAGED";
             alertTimer = 160;
           } else if (this.globalLoopCount === 10) {
-            alertText = "FATAL ERROR: STAGE 5 CORE DISINTEGRATION ENGAGED";
-            alertTimer = 200;
-            this.tempo = 130; // Recalculate tempo to 130 BPM (slightly faster than original)!
-          } else if (this.globalLoopCount === 11) {
-            if (!isUnderwaterMode && !isTransitioningToStage6) {
-              alertText = "CRITICAL: MAINBOARD FLOODED // POWERDOWN INBOUND";
-              alertTimer = 200;
-              triggerStage6UnderwaterTransition();
+            if (!isUnderwaterMode) {
+              triggerStage5UnderwaterTransition();
             }
-          } else if (this.globalLoopCount === 13) {
-            alertText = "WARNING: DEEP SECTOR // CYBER SHARKS DETECTED";
+          } else if (this.globalLoopCount === 12) {
+            alertText = "WARNING: STAGE 6 // DEEP CYBER SHARKS DETECTED";
             alertTimer = 180;
-          } else if (this.globalLoopCount === 15) {
-            alertText = "FATAL ERROR: DEEP SECTOR OVERFLOW // SHARK SWARM";
+          } else if (this.globalLoopCount === 14) {
+            alertText = "ALERT: STAGE 7 COSMIC HORIZON // GALAXY DEEP";
             alertTimer = 200;
-          } else if (this.globalLoopCount === 17) {
-            alertText = "ALERT: STAGE 9 COSMIC HORIZON // GALAXY DEEP";
-            alertTimer = 200;
+            
+            // Trigger Space Warp hyper-speed freeze transition
+            if (typeof triggerStage7SpaceWarpTransition === 'function' && !isTransitioningToStage7) {
+              triggerStage7SpaceWarpTransition();
+            }
+            
             // Restore bright, open audio filter (safeguarded via try-catch to prevent mobile audio thread lockups)
             try {
               if (this.ctx && this.underwaterFilter) {
@@ -1643,8 +2140,8 @@
             } catch (err) {
               console.warn("Cosmic audio filter recovery sweep failed, bypassing to prevent thread halt:", err);
             }
-          } else if (this.globalLoopCount === 20) {
-            alertText = "ALERT: STAGE 10 DEEP SECTOR // CYBER-OCTOPUS DETECTED";
+          } else if (this.globalLoopCount === 16) {
+            alertText = "ALERT: STAGE 8 DEEP SECTOR // CYBER-OCTOPUS DETECTED";
             alertTimer = 220;
           }
 
@@ -1680,23 +2177,58 @@
           Em: [164.81, 196, 246.94]
         };
 
+        const isSubmergedMode = (this.globalLoopCount >= 10 && this.globalLoopCount < 14);
+        const isCosmicMode = (this.globalLoopCount >= 14);
+
         let activeRoot = scale.A;
         let activePad = chordPads.Am;
 
         // Shift root scale chord loop every measure (16 steps)
         const currentMeasure = Math.floor(this.globalStep / 16);
-        if (currentMeasure === 0) {
-          activeRoot = scale.A;
-          activePad = chordPads.Am;
-        } else if (currentMeasure === 1) {
-          activeRoot = scale.F;
-          activePad = chordPads.F;
-        } else if (currentMeasure === 2) {
-          activeRoot = scale.G;
-          activePad = chordPads.G;
+        if (isCosmicMode) {
+          // Space Dorian Progression (Am9 -> D9 -> Fmaj7 -> G6/9)
+          if (currentMeasure === 0) {
+            activeRoot = 110.00; // A2
+            activePad = [220.00, 261.63, 329.63, 392.00]; // A3, C4, E4, G4 (Am9)
+          } else if (currentMeasure === 1) {
+            activeRoot = 73.42; // D2
+            activePad = [146.83, 220.00, 293.66, 369.99]; // D3, A3, D4, F#4 (D9/Dadd9)
+          } else if (currentMeasure === 2) {
+            activeRoot = 87.31; // F2
+            activePad = [174.61, 220.00, 261.63, 329.63]; // F3, A3, C4, E4 (Fmaj7)
+          } else {
+            activeRoot = 98.00; // G2
+            activePad = [196.00, 246.94, 293.66, 392.00]; // G3, B3, D4, G4 (G6/9)
+          }
+        } else if (isSubmergedMode) {
+          // Caribbean Reggae / Dub Progression in C Major (C -> G -> Am -> F)
+          if (currentMeasure === 0) {
+            activeRoot = 65.41; // C2
+            activePad = [261.63, 329.63, 392.00]; // C4, E4, G4 (C Major chord)
+          } else if (currentMeasure === 1) {
+            activeRoot = 98.00; // G2
+            activePad = [196.00, 246.94, 293.66]; // G3, B3, D4 (G Major chord)
+          } else if (currentMeasure === 2) {
+            activeRoot = 110.00; // A2
+            activePad = [220.00, 261.63, 329.63]; // A3, C4, E4 (A Minor chord)
+          } else {
+            activeRoot = 87.31; // F2
+            activePad = [174.61, 220.00, 261.63]; // F3, A3, C4 (F Major chord)
+          }
         } else {
-          activeRoot = scale.E;
-          activePad = chordPads.Em;
+          if (currentMeasure === 0) {
+            activeRoot = scale.A;
+            activePad = chordPads.Am;
+          } else if (currentMeasure === 1) {
+            activeRoot = scale.F;
+            activePad = chordPads.F;
+          } else if (currentMeasure === 2) {
+            activeRoot = scale.G;
+            activePad = chordPads.G;
+          } else {
+            activeRoot = scale.E;
+            activePad = chordPads.Em;
+          }
         }
 
         const stepDuration = (60.0 / this.tempo) / 4;
@@ -1705,27 +2237,58 @@
         const isStage2 = (this.globalLoopCount >= 4 && this.globalLoopCount < 6);
         const isStage3 = (this.globalLoopCount >= 6 && this.globalLoopCount < 8);
         const isStage4 = (this.globalLoopCount >= 8 && this.globalLoopCount < 10);
-        const isStage5 = (this.globalLoopCount >= 10 && this.globalLoopCount < 11);
-        const isStage6 = (this.globalLoopCount >= 11 && this.globalLoopCount < 17);
-        const isStage9 = (this.globalLoopCount >= 17);
-        const isIntensityEngaged = (this.globalLoopCount >= 4); 
-
+        const isIntensityEngaged = (this.globalLoopCount >= 4);
         // --- 1. SYNCAPATED DRIVING BASSLINE ---
-        const bassRhythm = [0, 2, 3, 4, 6, 8, 10, 11, 12, 14];
-        if (bassRhythm.includes(step)) {
-          const isOctave = (step === 3 || step === 11);
-          const freq = isOctave ? activeRoot * 2 : activeRoot;
-          this.playBass(freq, time, stepDuration * 0.95, this.globalLoopCount);
+        if (isSubmergedMode) {
+          // Melodic, syncopated Caribbean Dub Bassline (deep, spacious, octaves/fifths)
+          const bassStepRhythm = [0, 3, 6, 10, 13];
+          if (bassStepRhythm.includes(step)) {
+            let bassFreq = activeRoot;
+            let durationMult = 1.0;
+            if (step === 3 || step === 10) {
+              bassFreq = activeRoot * 2; // bouncy high octave sweep
+              durationMult = 0.7;
+            } else if (step === 6) {
+              bassFreq = activeRoot * 1.5; // anchor fifth
+              durationMult = 0.9;
+            } else if (step === 13) {
+              bassFreq = activeRoot * 1.33; // anchor fourth
+              durationMult = 0.8;
+            } else {
+              bassFreq = activeRoot; // low root fundamental
+              durationMult = 1.2;
+            }
+            this.playBass(bassFreq, time, stepDuration * durationMult, this.globalLoopCount);
+          }
+        } else {
+          const bassRhythm = [0, 2, 3, 4, 6, 8, 10, 11, 12, 14];
+          if (bassRhythm.includes(step)) {
+            const isOctave = (step === 3 || step === 11);
+            const freq = isOctave ? activeRoot * 2 : activeRoot;
+            this.playBass(freq, time, stepDuration * 0.95, this.globalLoopCount);
+          }
         }
 
         // --- 2. ATMOSPHERIC SOFT SYNTH CHORDS (Syncopated pattern) ---
         const chordRhythm = [2, 5, 8, 10, 13];
-        if (chordRhythm.includes(step)) {
+        if (isSubmergedMode) {
+          // Reggae Offbeat Chord Skank (chops on offbeats steps 4 and 12, with classic dub tape-echo delay sweeps)
+          if (step === 4 || step === 12) {
+            // Main chop: short, crisp staccato bubble chord
+            this.playSoftChord(activePad, time, stepDuration * 0.45, this.globalLoopCount);
+            
+            // Dotted 8th delay echo 1 (50% gain)
+            this.playSoftChord(activePad, time + stepDuration * 1.5, stepDuration * 0.35, this.globalLoopCount);
+            
+            // Dotted 8th delay echo 2 (25% gain)
+            this.playSoftChord(activePad, time + stepDuration * 3.0, stepDuration * 0.25, this.globalLoopCount);
+          }
+        } else if (chordRhythm.includes(step)) {
           this.playSoftChord(activePad, time, stepDuration * 1.5, this.globalLoopCount);
         }
 
         // --- 3. DRIVING DRUMS TRACK ---
-        if (isStage9) {
+        if (isCosmicMode) {
           // Stage 9: Deep open-space galaxy driving drums
           if (step === 0 || step === 8) {
             this.playKick(time);
@@ -1734,25 +2297,25 @@
             this.playSnare(time, 1.2);
           }
         }
-        else if (isStage6) {
-          // Stage 6 Submerged Beat: slow-mo heavy half-time industrial drums
-          if (step === 0 || step === 8 || step === 10) {
-            this.playKick(time);
+        else if (isSubmergedMode) {
+          // Stage 6 Reggae/Dub Beat: spacious "One-Drop" (kick + snare hit together strictly on beat 3 / step 8)
+          // Plus organic finger snap on beat 4 / step 12 and double dub snare echoes
+          if (step === 0) {
+            this.playKick(time); // soft steppers kick drop to maintain game pulse
           }
-          if (step === 4 || step === 12) {
-            this.playSnare(time, 1.25);
+          if (step === 8) {
+            this.playKick(time);
+            this.playSnare(time, 1.25); // rimshot / snare drop on beat 3!
+            
+            // Snare feedback echoes (dub delay)
+            this.playSnare(time + stepDuration * 1.5, 0.6); // echo 1 (dotted 8th delay)
+            this.playSnare(time + stepDuration * 3.0, 0.3); // echo 2 (dotted 8th delay feedback)
+          }
+          if (step === 12) {
+            this.playSnap(time); // organic snap accent on beat 4!
           }
         }
-        else if (isStage5) {
-          // Stage 5 hyper chug: double bass kick speedroll!
-          if (step % 2 === 0 || step === 3 || step === 7 || step === 11 || step === 15) {
-            this.playKick(time);
-          }
-          // Extra heavy clashing arena Snares on 4, 8, 12, 14
-          if (step === 4 || step === 8 || step === 12 || step === 14) {
-            this.playSnare(time, 1.6);
-          }
-        }
+
         else if (isStage4) {
           // Stage 4 headbanger: Constant heavy kicks + claps Snare
           // Double Kicks on every even beat chug
@@ -1774,22 +2337,21 @@
         }
 
         // Hi-Hat rhythms depending on Stage
-        if (isStage9) {
+        if (isCosmicMode) {
           // Continuous celestial hi-hats sounding like soft solar wind
           const volumeMult = 0.35 + Math.sin(step * 0.5) * 0.15;
           this.playHihat(time, volumeMult, step % 4 === 2);
         }
-        else if (isStage6) {
-          // Slow aquatic ticks on eighth steps
-          if (step % 2 === 0) {
-            this.playHihat(time, 0.75, false);
+        else if (isSubmergedMode) {
+          // Shuffling offbeat Caribbean Hi-Hat bubble: closed hats tick on 2, 6, 10, 14, open hat splash on 4 and 12
+          if (step === 2 || step === 6 || step === 10 || step === 14) {
+            this.playHihat(time, 0.65, false); // closed offbeat tick
+          }
+          if (step === 4 || step === 12) {
+            this.playHihat(time, 0.9, true); // open offbeat splash (layered with skank chops)
           }
         }
-        else if (isStage5) {
-          // Stage 5: continuous driving open hats on offbeats, heavy closed hats on beats
-          const isOffbeat = (step % 2 !== 0);
-          this.playHihat(time, isOffbeat ? 1.3 : 0.6, isOffbeat);
-        }
+
         else if (isStage4) {
           // Stage 4: continuous 16th note chug, with open hat ticks on offbeats!
           const isOffbeat = (step === 2 || step === 6 || step === 10 || step === 14);
@@ -1828,11 +2390,24 @@
         // --- 4. AMBIENT CHORD WASH ---
         if (step === 0) {
           let chordDuration = (60.0 / this.tempo) * 4; 
-          if (this.globalLoopCount >= 10 && this.globalLoopCount < 11) {
-            // Stage 5: Short chords (0.85 seconds, well under a second)
-            chordDuration = 0.85;
+          if (isSubmergedMode) {
+            // Sparse sub-aquatic ambient chords (very warm and slow-decaying)
+            this.playPad(activePad, time, chordDuration * 0.8, this.globalLoopCount);
+          } else {
+            this.playPad(activePad, time, chordDuration * 0.98, this.globalLoopCount);
           }
-          this.playPad(activePad, time, chordDuration * 0.98, this.globalLoopCount);
+        }
+
+        // --- 4.5 SUB-AQUATIC SYNTH FILL (Stage 5+) ---
+        if (isSubmergedMode) {
+          // Caribbean Steel-Drum style chime arpeggio (follows active chord scale harmonics)
+          if (step === 10) {
+            this.playPluck(activeRoot * 3, time, stepDuration * 1.5); // fifth (E4 in Am)
+          } else if (step === 11) {
+            this.playPluck(activeRoot * 2.5, time, stepDuration * 0.8); // third (C4 in Am)
+          } else if (step === 14) {
+            this.playPluck(activeRoot * 4, time, stepDuration * 1.5); // octave root (A4 in Am)
+          }
         }
 
         // --- 5. RETRO LEAD MELODY (Primary hook) ---
@@ -1847,48 +2422,52 @@
           659.25, 0, 587.33, 0, 523.25, 0, 0, 0, 493.88, 0, 440.00, 0, 493.88, 0, 440.00, 0
         ];
 
-        let targetFreq = melody[this.globalStep];
-        if (targetFreq > 0 && this.globalLoopCount >= 10 && this.globalLoopCount < 11) {
-          targetFreq = 659.25; // Hammer E5 repeatedly in Stage 5, keeping original rhythm intact!
-        }
-        if (targetFreq > 0) {
-          this.playLead(targetFreq, time, stepDuration * 1.8, isIntensityEngaged);
-          
-          const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-          if (this.globalLoopCount >= 17) {
-            // Stage 9: Clean celestial soaring lead with clear high chime arpeggios
-            this.playLead(targetFreq * 2, time, stepDuration * 1.4, true);     // High Octave arpeggio echo
-          } else if (this.globalLoopCount >= 10 && this.globalLoopCount < 17) {
-            // Stage 5: Ultra-distorted guitar lead layered in massive three-voice power chords (Octave up, octave down, and perfect fifth!)
-            if (!isTouch) {
-              this.playLead(targetFreq * 2, time, stepDuration * 1.5, true);     // High Octave
-              this.playLead(targetFreq * 1.5, time, stepDuration * 1.6, true);   // Perfect Fifth
-              this.playLead(targetFreq * 0.5, time, stepDuration * 1.8, true);   // Heavy Low Octave chug!
-            } else {
-              this.playLead(targetFreq * 2, time, stepDuration * 1.5, true);     // High Octave (Single layer keeps CPU extremely low)
+        const cosmicMelody = [
+          // Bar 1 (Am9 vibe: E6 -> G6 -> B6 -> A6 -> E6)
+          1318.51, 0, 0, 1567.98, 0, 1975.53, 0, 0, 1760.00, 0, 0, 0, 1318.51, 0, 0, 0,
+          // Bar 2 (D9 vibe: F#6 -> A6 -> C#7 -> B6 -> F#6)
+          1479.98, 0, 0, 1760.00, 0, 2217.46, 0, 0, 1975.53, 0, 0, 0, 1479.98, 0, 0, 0,
+          // Bar 3 (Fmaj7 vibe: E6 -> G6 -> C7 -> A6 -> F6)
+          1318.51, 0, 0, 1567.98, 0, 2093.00, 0, 0, 1760.00, 0, 0, 0, 1396.91, 0, 0, 0,
+          // Bar 4 (G6/9 vibe: D6 -> G6 -> B6 -> D7 -> G6)
+          1174.66, 0, 1567.98, 0, 1975.53, 0, 0, 0, 2349.32, 0, 1975.53, 0, 1567.98, 0, 0, 0
+        ];
+
+        let targetFreq = isCosmicMode ? cosmicMelody[this.globalStep] : melody[this.globalStep];
+
+        if (!isSubmergedMode && targetFreq > 0) {
+          if (isCosmicMode) {
+            // Space cosmic lead: very long, smooth glides / soft chime space echo
+            this.playLead(targetFreq, time, stepDuration * 2.5, true);
+            
+            // Double space delay echoes shifted up a perfect fifth! (freq * 1.5)
+            this.playLead(targetFreq * 1.5, time + stepDuration * 0.5, stepDuration * 1.5, true);
+            this.playLead(targetFreq * 1.5, time + stepDuration * 1.0, stepDuration * 0.8, true);
+          } else {
+            this.playLead(targetFreq, time, stepDuration * 1.8, isIntensityEngaged);
+            
+            const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+            if (this.globalLoopCount >= 8) {
+              // Stage 4: Massive soaring synthesized metal POWER CHORDS! (Root + Fifth + Octave)
+              if (!isTouch) {
+                this.playLead(targetFreq * 2, time, stepDuration * 1.5, true);   // Octave
+                this.playLead(targetFreq * 1.5, time, stepDuration * 1.6, true); // Perfect Fifth!
+              } else {
+                this.playLead(targetFreq * 2, time, stepDuration * 1.5, true);   // Octave
+              }
+            } else if (this.globalLoopCount >= 6) {
+              // Stage 3: Octave doubling
+              this.playLead(targetFreq * 2, time, stepDuration * 1.5, true);
             }
-          } else if (this.globalLoopCount >= 8) {
-            // Stage 4: Massive soaring synthesized metal POWER CHORDS! (Root + Fifth + Octave)
-            if (!isTouch) {
-              this.playLead(targetFreq * 2, time, stepDuration * 1.5, true);   // Octave
-              this.playLead(targetFreq * 1.5, time, stepDuration * 1.6, true); // Perfect Fifth!
-            } else {
-              this.playLead(targetFreq * 2, time, stepDuration * 1.5, true);   // Octave
-            }
-          } else if (this.globalLoopCount >= 6) {
-            // Stage 3: Octave doubling
-            this.playLead(targetFreq * 2, time, stepDuration * 1.5, true);
           }
         }
 
         // --- 6. SOARING SPACE HIGH MELODY (Starts at loop count >= 2, randomized sequence pattern) ---
-        if (this.globalLoopCount >= 2) {
+        if (this.globalLoopCount >= 2 && !isSubmergedMode) {
           const activePattern = this.highMelodyPatterns[this.currentPatternIndex];
           const highFreq = activePattern[this.globalStep];
           if (highFreq > 0) {
-            const isStage9 = (this.globalLoopCount >= 17);
-            const isStage5 = (this.globalLoopCount >= 10 && this.globalLoopCount < 11);
-            if (isStage9) {
+            if (isCosmicMode) {
               const noteDuration = stepDuration * 0.65;
               // 1st note: Main chime
               this.playHighLead(highFreq, time, noteDuration, true);
@@ -1896,17 +2475,14 @@
               this.playHighLead(highFreq * 1.5, time + stepDuration * 0.4, noteDuration * 0.7, true);
               // 3rd note: 2nd Echo (space delay at 0.8 steps, shifted up a perfect fifth! freq * 1.5)
               this.playHighLead(highFreq * 1.5, time + stepDuration * 0.8, noteDuration * 0.4, true);
-            } else if (isStage5) {
-              const noteDuration = stepDuration * 0.45;
-              this.playHighLead(highFreq, time, noteDuration, true);
-              // Echo pulse (delay effect) to fit the "All hope is lost" dramatic theme!
-              this.playHighLead(highFreq, time + stepDuration * 0.5, noteDuration * 0.7, true);
             } else {
               const noteSteps = (this.globalStep === 0 || this.globalStep === 32) ? 16 : 8;
               const noteDuration = stepDuration * noteSteps;
               this.playHighLead(highFreq, time, noteDuration * 0.98, false);
             }
           }
+        } else if (isSubmergedMode) {
+          // No lead melody / flute in Stage 5 & 6 to build massive deep underwater suspense!
         }
       }
     }
@@ -1949,6 +2525,10 @@
     let baseSpeed = 135; // Milliseconds per tick
     let currentSpeed = baseSpeed;
     let gameActive = false;
+    let wasStageMenuOpenOnStart = false; // Tracks if stage select menu was open when game started
+    let isStageMenuOpen = false;         // Tracks if stage select menu is currently open/visible to player
+    let submergeTransitionTimer = 0;     // Ticks remaining for the transition freeze
+    let bubbleParticles = [];            // Special transition bubble particles
     
     // Segment growth accumulation
     let pendingGrowth = 0;
@@ -1962,25 +2542,28 @@
     // Set initial High Score display
     highScoreVal.textContent = String(highScore).padStart(4, '0');
 
-    // Stage 6 Underwater Mode States
+    // Stage 5 Underwater Mode States
     let isUnderwaterMode = false;
-    let isTransitioningToStage6 = false;
-    let stage6StartScore = 0;
+    let isTransitioningToStage5 = false;
+    let stage5StartScore = 0;
 
-    // Stage 7 & 8 Shark States
+    // Stage 5+ Shark States
     let sharks = [];
     let sharkGapTimer = 3000;
 
-    // Stage 9 Cosmic Horizon States
+    // Stage 7 Cosmic Horizon States
     let underwaterFade = 0.0;
     let bullets = [];
     let timeSinceLastShot = 0;
     let nextLaserCooldown = 3000;
-    let stage9StartSpeed = 135;
-    let stage9StartScore = 0;
+    let stage7StartSpeed = 135;
+    let stage7StartScore = 0;
     let stars = [];
+    let spaceWarpTransitionTimer = 0;
+    let isTransitioningToStage7 = false;
+    let warpLines = [];
 
-    // Stage 10 Cosmic Octopus States
+    // Stage 8 Cyber-Octopus States
     let octopus = null;
     let octopusTickCounter = 0;
     for (let i = 0; i < 25; i++) {
@@ -1992,16 +2575,28 @@
       });
     }
 
-    function triggerStage6UnderwaterTransition() {
-      if (isTransitioningToStage6) return;
-      isTransitioningToStage6 = true;
-      stage6StartScore = score; // Record score IMMEDIATELY upon entering Stage 6
+    function triggerStage5UnderwaterTransition() {
+      if (isTransitioningToStage5) return;
+      isTransitioningToStage5 = true;
+      isUnderwaterMode = true;
+      stage5StartScore = score; // Record score IMMEDIATELY upon entering Stage 5
       
-      // Pause active physics update loop
-      gameActive = false;
-      clearInterval(gameLoopInterval);
+      submergeTransitionTimer = 90; // ~1.5 seconds freeze at 60fps canvas draw rate
       
-      // Play 8-bit brown note massive pitch dive powerdown!
+      // Clear and generate transition bubble particles rising from bottom of the screen
+      bubbleParticles = [];
+      for (let i = 0; i < 45; i++) {
+        bubbleParticles.push({
+          x: Math.random() * 600,
+          y: 600 + Math.random() * 200,
+          vy: -(Math.random() * 2.8 + 1.6),
+          radius: Math.random() * 4.5 + 2,
+          alpha: Math.random() * 0.45 + 0.4
+        });
+      }
+      
+      // Play both submerge swoosh AND massive powerdown machine sweep!
+      audio.playSubmergeSFX();
       audio.playPowerdownSFX();
       
       // Muffle all audio elements dynamically over 1.8 seconds (safeguarded via try-catch to prevent mobile control lockups)
@@ -2016,24 +2611,30 @@
         console.warn("Underwater audio filter transition sweep failed, bypassing to prevent thread halt:", err);
       }
       
-      // Freeze screen physics ticks for exactly 2 seconds
-      setTimeout(() => {
-        isTransitioningToStage6 = false;
-        isUnderwaterMode = true;
-        gameActive = true;
-        
-        // Slow down sequencer tempo to a sluggish, heavy 64 BPM
-        audio.tempo = 64;
-        
-        // Muffle tick speed to a slow underwater crawl (270ms per tick)
-        currentSpeed = 270;
-        
-        // Restart game step interval at slower underwater speed
-        gameLoopInterval = setInterval(gameStep, currentSpeed);
-        
-        alertText = "SYSTEM COOLDOWN: STAGE 6 UNDERWATER MODE ACTIVE";
-        alertTimer = 180;
-      }, 2000);
+      alertText = "ALERT: STAGE 5 // SUB-AQUATIC SECTOR ACTIVE";
+      alertTimer = 180;
+    }
+
+    function triggerStage7SpaceWarpTransition() {
+      if (isTransitioningToStage7) return;
+      isTransitioningToStage7 = true;
+      
+      spaceWarpTransitionTimer = 90; // ~1.5 seconds freeze at 60fps canvas draw rate
+      
+      // Generate warp horizontal streaks
+      warpLines = [];
+      for (let i = 0; i < 35; i++) {
+        warpLines.push({
+          x: Math.random() * canvas.width,
+          y: Math.random() * canvas.height,
+          length: Math.random() * 80 + 40,
+          speed: Math.random() * 25 + 15,
+          opacity: Math.random() * 0.6 + 0.4
+        });
+      }
+      
+      // Play Space Warp Swoosh SFX
+      audio.playSpaceWarpSFX();
     }
 
     // Initialize/Spawn Snake in center
@@ -2168,25 +2769,24 @@
     
     function drawGame() {
       // Update underwater fade factor dynamically
-      if (audio.globalLoopCount >= 17) {
+      if (audio.globalLoopCount >= 14) {
         underwaterFade = Math.max(0.0, underwaterFade - 0.015);
-      } else if (audio.globalLoopCount >= 11) {
+      } else if (audio.globalLoopCount >= 10) {
         underwaterFade = 1.0;
       } else {
         underwaterFade = 0.0;
       }
 
-      // Apply real-time visual screen shake synced to sequencer beats in Stage 4, 5, and 6!
+      // Apply real-time visual screen shake synced to sequencer beats in Stage 4 and 6!
       const isStage4 = (audio.globalLoopCount >= 8 && audio.globalLoopCount < 10);
-      const isStage5 = (audio.globalLoopCount >= 10 && audio.globalLoopCount < 11);
-      const isStage6 = (audio.globalLoopCount >= 11 && audio.globalLoopCount < 17);
+      const isSubmergedMode = (audio.globalLoopCount >= 10 && audio.globalLoopCount < 14);
       let shakeOffset = { x: 0, y: 0 };
       
-      if ((isStage4 || isStage5 || isStage6) && audio.isPlayingMusic) {
-        const heavySteps = isStage5 ? [0, 2, 4, 6, 8, 10, 12, 14, 15] : [0, 4, 6, 8, 12, 14]; // kicks, snares, claps
+      if ((isStage4 || isSubmergedMode) && audio.isPlayingMusic) {
+        const heavySteps = [0, 4, 6, 8, 12, 14]; // kicks, snares, claps
         if (heavySteps.includes(audio.currentStep)) {
-          // Shake camera instantly in sync, make it even wilder in Stage 5 (up to 7.5px)!
-          const maxShake = isStage6 ? 4.5 : (isStage5 ? 7.5 : (audio.currentStep % 4 === 0 ? 5.5 : 3.8));
+          // Shake camera instantly in sync, make it even wilder in Stage 4 (up to 5.5px) or submerged (4.5px)!
+          const maxShake = isSubmergedMode ? 4.5 : (audio.currentStep % 4 === 0 ? 5.5 : 3.8);
           screenShake = Math.max(screenShake, maxShake);
         }
       }
@@ -2202,8 +2802,8 @@
       ctx.fillStyle = 'rgba(13, 2, 17, 0.28)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Draw open space celestial galaxy backdrop for Stage 9 (loop count >= 17)
-      if (audio.globalLoopCount >= 17) {
+      // Draw open space celestial galaxy backdrop for Stage 7 (loop count >= 14)
+      if (audio.globalLoopCount >= 14) {
         const now = Date.now();
         ctx.save();
         
@@ -2247,8 +2847,8 @@
 
       // 2. Draw Retro Glowing Grid lines
       let gridAlpha = 0.06;
-      if ((isStage4 || isStage5 || isStage6) && audio.isPlayingMusic) {
-        const maxShakeVal = isStage6 ? 4.5 : (isStage5 ? 7.5 : 5.5);
+      if ((isStage4 || isSubmergedMode) && audio.isPlayingMusic) {
+        const maxShakeVal = isSubmergedMode ? 4.5 : 5.5;
         gridAlpha = 0.06 + (screenShake / maxShakeVal) * 0.18; // pulse grid line glow with beat shake
       }
       ctx.strokeStyle = `rgba(189, 0, 255, ${gridAlpha})`;
@@ -2283,12 +2883,12 @@
         
         if (isHead) {
           ctx.fillStyle = '#ff007f'; // Neon pink head
-          ctx.shadowBlur = isStage6 ? 20 : (isStage5 ? 30 : (isStage4 ? 24 : 15));
+          ctx.shadowBlur = isSubmergedMode ? 20 : (isStage4 ? 24 : 15);
           ctx.shadowColor = '#ff007f';
         } else {
           // Shifting purple/magenta gradient
           ctx.fillStyle = `hsl(${290 + (index * 3) % 40}, 100%, 50%)`;
-          ctx.shadowBlur = isStage6 ? 12 : (isStage5 ? 18 : (isStage4 ? 15 : 8));
+          ctx.shadowBlur = isSubmergedMode ? 12 : (isStage4 ? 15 : 8);
           ctx.shadowColor = '#bd00ff';
         }
 
@@ -2336,7 +2936,7 @@
         const fy = fItem.y * GRID_SIZE + GRID_SIZE / 2;
 
         ctx.save();
-        const foodGlow = isStage6 ? 22 + Math.sin(frameCount * 0.12) * 6 : (isStage5 ? 32 + Math.sin(frameCount * 0.22) * 10 : (isStage4 ? 28 + Math.sin(frameCount * 0.2) * 8 : 18 + Math.sin(frameCount * 0.15) * 4));
+        const foodGlow = isSubmergedMode ? 22 + Math.sin(frameCount * 0.12) * 6 : (isStage4 ? 28 + Math.sin(frameCount * 0.2) * 8 : 18 + Math.sin(frameCount * 0.15) * 4);
         ctx.shadowBlur = foodGlow;
         ctx.shadowColor = fItem.color;
         ctx.fillStyle = fItem.color;
@@ -2471,7 +3071,7 @@
         ctx.restore();
       });
 
-      // 5.5 Draw Menacing Cyber Sharks (Stage 7+)
+      // 5.5 Draw Menacing Cyber Sharks (Stage 6+)
       sharks.forEach(sItem => {
         ctx.save();
         const sx = sItem.x * GRID_SIZE;
@@ -2520,8 +3120,8 @@
         ctx.restore();
       });
 
-      // 5.6 Draw Laser Bullets (Stage 9+)
-      if (audio.globalLoopCount >= 17) {
+      // 5.6 Draw Laser Bullets (Stage 7+)
+      if (audio.globalLoopCount >= 14) {
         bullets.forEach(b => {
           ctx.save();
           const bx = b.x * GRID_SIZE + GRID_SIZE / 2;
@@ -2548,7 +3148,7 @@
         });
       }
 
-      // 5.7 Draw Cyber-Octopus (Stage 10+)
+      // 5.7 Draw Cyber-Octopus (Stage 8+)
       if (octopus) {
         ctx.save();
         const ox = octopus.x * GRID_SIZE + GRID_SIZE / 2;
@@ -2651,13 +3251,13 @@
         ctx.fillStyle = foods[0] ? foods[0].color : '#00ffff';
         
         // Highlight transition alerts
-        if (alertText.includes("STAGE 10")) {
+        if (alertText.includes("STAGE 8")) {
           ctx.fillStyle = "#00ffcc"; // Glowing space cyan-green
-        } else if (alertText.includes("STAGE 9")) {
+        } else if (alertText.includes("STAGE 7")) {
           ctx.fillStyle = "#bd00ff"; // Space purple
-        } else if (alertText.includes("STAGE 6")) {
+        } else if (alertText.includes("STAGE 5") || alertText.includes("STAGE 6")) {
           ctx.fillStyle = "#00e1ff"; // Sub-aquatic cyan
-        } else if (alertText.includes("STAGE 5") || alertText.includes("STAGE 4") || alertText.includes("STAGE 3") || alertText.includes("STAGE 2")) {
+        } else if (alertText.includes("STAGE 4") || alertText.includes("STAGE 3") || alertText.includes("STAGE 2")) {
           ctx.fillStyle = alertText.includes("STAGE 2") ? "#ffe600" : "#ff007f"; 
         }
         
@@ -2675,8 +3275,8 @@
         ctx.restore();
       }
 
-      // 7. Apply Stage 5 visual play area disintegration (glitch slices)
-      if (isStage5 && audio.isPlayingMusic && Math.random() < 0.28) {
+      // 7. Apply Stage 4 visual play area disintegration (glitch slices)
+      if (isStage4 && audio.isPlayingMusic && Math.random() < 0.28) {
         const glitchCount = Math.floor(Math.random() * 3) + 1; // up to three glitches at a time!
         for (let g = 0; g < glitchCount; g++) {
           const sliceY = Math.floor(Math.random() * canvas.height);
@@ -2716,10 +3316,185 @@
           );
         }
       }
+
+      // 9. Submerge Transition Animation Overlay (Plunge transition from Stage 4 to 5)
+      if (submergeTransitionTimer > 0) {
+        const progress = (90 - submergeTransitionTimer) / 90;
+        const waterTopY = canvas.height - (progress * canvas.height);
+
+        // A. Draw rising deep blue water block with wave top
+        ctx.save();
+        ctx.fillStyle = `rgba(0, 24, 76, ${0.45 + progress * 0.32})`; // gets deep dark blue
+        ctx.fillRect(0, waterTopY, canvas.width, canvas.height - waterTopY);
+
+        // Draw wavy surface line
+        ctx.beginPath();
+        ctx.strokeStyle = '#00ffcc';
+        ctx.lineWidth = 3.5;
+        ctx.shadowBlur = 18;
+        ctx.shadowColor = '#00ffcc';
+        for (let x = 0; x <= canvas.width; x += 8) {
+          const y = waterTopY + Math.sin(x * 0.06 + frameCount * 0.25) * 6.5;
+          if (x === 0) {
+            ctx.moveTo(x, y);
+          } else {
+            ctx.lineTo(x, y);
+          }
+        }
+        ctx.stroke();
+        ctx.restore();
+
+        // B. Update and draw rising bubble particles
+        ctx.save();
+        bubbleParticles.forEach(p => {
+          p.y += p.vy; // rise up
+          p.x += Math.sin(p.y * 0.04) * 0.95; // organic sway
+          
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(0, 240, 255, ${p.alpha})`; // glowing cyan bubble
+          ctx.strokeStyle = `rgba(255, 255, 255, ${p.alpha * 0.75})`;
+          ctx.lineWidth = 0.85;
+          ctx.fill();
+          ctx.stroke();
+        });
+        ctx.restore();
+
+        // C. Render High-Tension Glitch Alert Texts
+        ctx.save();
+        ctx.font = '24px "Press Start 2P"';
+        ctx.fillStyle = '#00ffcc';
+        ctx.textAlign = 'center';
+        ctx.shadowBlur = 25;
+        ctx.shadowColor = '#00ffcc';
+        
+        // Flickering text
+        if (Math.floor(frameCount / 5) % 2 === 0) {
+          ctx.fillText("SUBMERGING...", canvas.width / 2, canvas.height / 2 - 35);
+        }
+        
+        ctx.font = '11px "Press Start 2P"';
+        ctx.fillStyle = '#ff007f';
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = '#ff007f';
+        ctx.fillText("SYSTEM FLOODING // INTRUSION DETECTED", canvas.width / 2, canvas.height / 2 + 10);
+        ctx.fillText(`PLUNGING IN ${Math.ceil(submergeTransitionTimer / 30)}s`, canvas.width / 2, canvas.height / 2 + 42);
+        ctx.restore();
+
+        // D. Trigger heavy screen shake during transition
+        screenShake = Math.max(screenShake, 5.0);
+
+        // E. Decrement transition frame timer
+        submergeTransitionTimer--;
+        
+        // F. On transition end, plunge speed instantly to 200ms sub-aquatic rate
+        if (submergeTransitionTimer === 0) {
+          currentSpeed = 200;
+          clearInterval(gameLoopInterval);
+          gameLoopInterval = setInterval(gameStep, currentSpeed);
+        }
+      }
+
+      // 9.5 Space Warp Transition Animation Overlay (Warp transition from Stage 6 to 7)
+      if (spaceWarpTransitionTimer > 0) {
+        const progress = (90 - spaceWarpTransitionTimer) / 90;
+
+        // A. Draw warp background block (rich dark space with a faint purple/cyan neon hue)
+        ctx.save();
+        ctx.fillStyle = `rgba(10, 0, 24, ${0.45 + progress * 0.35})`; // gets darker and spacey
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.restore();
+
+        // B. Update and draw horizontal white warp lines rushing from right to left
+        ctx.save();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.8;
+        warpLines.forEach(line => {
+          line.x -= line.speed;
+          // Loop lines back to the right if they exit
+          if (line.x + line.length < 0) {
+            line.x = canvas.width + Math.random() * 100;
+            line.y = Math.random() * canvas.height;
+          }
+          
+          ctx.beginPath();
+          ctx.globalAlpha = line.opacity;
+          ctx.moveTo(line.x, line.y);
+          ctx.lineTo(line.x + line.length, line.y);
+          ctx.stroke();
+        });
+        ctx.restore();
+
+        // C. Draw 3 expanding circular cyan/purple neon concentric warp rings from center of the screen
+        ctx.save();
+        ctx.lineWidth = 3.5;
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        const maxRadius = Math.sqrt(centerX * centerX + centerY * centerY);
+        
+        for (let i = 0; i < 3; i++) {
+          const ringProgress = (progress + i * 0.33) % 1.0;
+          const radius = ringProgress * maxRadius;
+          const alpha = 1.0 - ringProgress;
+          
+          ctx.beginPath();
+          ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+          
+          const grad = ctx.createRadialGradient(centerX, centerY, radius * 0.8, centerX, centerY, radius);
+          grad.addColorStop(0, `rgba(0, 240, 255, 0)`);
+          grad.addColorStop(0.5, `rgba(0, 240, 255, ${alpha * 0.7})`);
+          grad.addColorStop(1, `rgba(139, 0, 255, ${alpha * 0.9})`);
+          
+          ctx.strokeStyle = grad;
+          ctx.shadowBlur = 20 * alpha;
+          ctx.shadowColor = '#00f0ff';
+          ctx.stroke();
+        }
+        ctx.restore();
+
+        // D. Render Space Warp Warning / Progress Alert Texts
+        ctx.save();
+        ctx.font = '24px "Press Start 2P"';
+        ctx.fillStyle = '#00f0ff';
+        ctx.textAlign = 'center';
+        ctx.shadowBlur = 25;
+        ctx.shadowColor = '#00f0ff';
+        
+        // Flickering hyper-jump text
+        if (Math.floor(frameCount / 4) % 2 === 0) {
+          ctx.fillText("SPACE WARP...", canvas.width / 2, canvas.height / 2 - 35);
+        }
+        
+        ctx.font = '11px "Press Start 2P"';
+        ctx.fillStyle = '#ff00ff';
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = '#ff00ff';
+        ctx.fillText("LAUNCHING TO COSMIC SECTOR // WARP SPEED", canvas.width / 2, canvas.height / 2 + 10);
+        ctx.fillText(`SPACE JUMP IN ${Math.ceil(spaceWarpTransitionTimer / 30)}s`, canvas.width / 2, canvas.height / 2 + 42);
+        ctx.restore();
+
+        // E. Screen shake
+        screenShake = Math.max(screenShake, 6.0);
+
+        // F. Decrement frame timer
+        spaceWarpTransitionTimer--;
+
+        // G. On warp end, transition is complete
+        if (spaceWarpTransitionTimer === 0) {
+          stage7StartScore = score;
+          currentSpeed = stage7StartSpeed;
+          clearInterval(gameLoopInterval);
+          gameLoopInterval = setInterval(gameStep, currentSpeed);
+        }
+      }
     }
 
     // --- GAME PHYSICS TICK ---
     function updatePhysics() {
+      if (submergeTransitionTimer > 0 || spaceWarpTransitionTimer > 0) {
+        return; // Suspend physics ticks during transitions
+      }
+
       // 1. Process queued keyboard steering command (Prevents lost keystrokes)
       if (inputQueue.length > 0) {
         const nextMove = inputQueue.shift();
@@ -2800,7 +3575,7 @@
         }
       }
 
-      // 4.5. Stage 7 & 8 Shark Collision check
+      // 4.5. Stage 6 & 8 Shark Collision check
       for (let i = 0; i < sharks.length; i++) {
         const s = sharks[i];
         if (s && head.x >= s.x && head.x <= s.x + 1 && head.y >= s.y && head.y <= s.y + 1) {
@@ -2845,7 +3620,7 @@
         // Setup multi-segment pending growth ticks
         pendingGrowth += eatenFood.growthValue;
 
-        // If in Stage 5, maintain 3 foods. Otherwise standard 1 food behavior.
+        // If in Stage 5+, maintain 3 foods. Otherwise standard 1 food behavior.
         if (audio.globalLoopCount >= 10) {
           spawnFood(foodEatenIndex);
         } else {
@@ -2856,14 +3631,15 @@
         }
 
         // Speed ramp scaling
-        if (audio.globalLoopCount >= 17) {
-          const stage9ScoreDiff = score - stage9StartScore;
-          const speedReduction = Math.floor(stage9ScoreDiff / 100) * 6.5; // Accelerate faster (6.5ms per 100 points) in Stage 9!
-          currentSpeed = Math.max(65, stage9StartSpeed - speedReduction);
-        } else if (isUnderwaterMode || (audio.globalLoopCount >= 11 && audio.globalLoopCount < 17)) {
-          const stage6ScoreDiff = score - stage6StartScore;
-          const speedReduction = Math.floor(stage6ScoreDiff / 100) * 4.0; // Slow ramp-up under water
-          currentSpeed = Math.max(120, 270 - speedReduction);
+        if (audio.globalLoopCount >= 14) {
+          const stage7ScoreDiff = score - stage7StartScore;
+          const speedReduction = Math.floor(stage7ScoreDiff / 100) * 6.5; // Accelerate faster (6.5ms per 100 points) in Stage 7!
+          currentSpeed = Math.max(65, stage7StartSpeed - speedReduction);
+        } else if (audio.globalLoopCount >= 10) {
+          // Submerged speed ramp: start from 200ms, accelerate by 8ms per 100 points eaten under water
+          const stage5ScoreDiff = score - stage5StartScore;
+          const speedReduction = Math.floor(stage5ScoreDiff / 100) * 8.0;
+          currentSpeed = Math.max(135, 200 - speedReduction); // never goes faster than normal baseSpeed (135ms) under water
         } else {
           const speedReduction = Math.floor(score / 100) * 1.5;
           currentSpeed = Math.max(55, baseSpeed - speedReduction);
@@ -2880,24 +3656,24 @@
         }
       }
 
-      // Maintain up to 3 foods on the grid in Stage 5!
+      // Maintain up to 3 foods on the grid in Stage 5+!
       if (audio.globalLoopCount >= 10 && foods.length < 3) {
         while (foods.length < 3) {
           spawnFood(foods.length);
         }
       }
 
-      // 7. Stage 7 & 8 & 9 Shark Mechanics (Loop 13+)
-      if (audio.globalLoopCount >= 13) {
-        // Transition from underwater physics speed to cosmic physics speed in Stage 9 (speed remains identical to the end of Stage 8 at transition start)
-        if (audio.globalLoopCount >= 17 && isUnderwaterMode) {
+      // 7. Stage 6 & 7 Shark Mechanics (Loop 12+)
+      if (audio.globalLoopCount >= 12) {
+        // Transition from underwater physics speed to cosmic physics speed in Stage 7 (speed remains identical to the end of Stage 6 at transition start)
+        if (audio.globalLoopCount >= 14 && isUnderwaterMode) {
           isUnderwaterMode = false;
-          stage9StartSpeed = currentSpeed; // Record exact speed from Stage 8
-          stage9StartScore = score;        // Record score at transition start
+          stage7StartSpeed = currentSpeed; // Record exact speed from Stage 6
+          stage7StartScore = score;        // Record score at transition start
         }
 
-        // Stage 9 constraint: at least one shark visible at all times
-        if (audio.globalLoopCount >= 17 && sharks.length === 0) {
+        // Stage 7 constraint: at least one shark visible at all times
+        if (audio.globalLoopCount >= 14 && sharks.length === 0) {
           sharkGapTimer = 0;
         }
 
@@ -2911,7 +3687,7 @@
         const activeCountAfter = sharks.length;
         
         // If a shark disappeared, schedule a new gap if not already set and space remains
-        const maxSharks = audio.globalLoopCount >= 15 ? 3 : 1;
+        const maxSharks = audio.globalLoopCount >= 14 ? 3 : 1;
         if (activeCountAfter < activeCountBefore && sharks.length < maxSharks) {
           if (sharkGapTimer <= 0) {
             sharkGapTimer = 2000 + Math.random() * 4000;
@@ -2964,10 +3740,10 @@
             }
             
             if (!overlap) {
-              const isStage8 = audio.globalLoopCount >= 15;
-              const activeDuration = isStage8 
-                ? (5000 + Math.random() * 3000)  // Stage 8: 5 to 8 seconds (2-3s longer!)
-                : (3000 + Math.random() * 2000); // Stage 7: 3 to 5 seconds
+              const isStage7 = audio.globalLoopCount >= 14;
+              const activeDuration = isStage7 
+                ? (5000 + Math.random() * 3000)  // Stage 7: 5 to 8 seconds (2-3s longer!)
+                : (3000 + Math.random() * 2000); // Stage 6: 3 to 5 seconds
               
               sharks.push({
                 x: sx,
@@ -2975,8 +3751,8 @@
                 timeLeft: activeDuration
               });
               
-              // Play Jaws-themed ominous sound (Stage 8 detunes & boosts loudness)
-              audio.playSharkSFX(isStage8);
+              // Play Jaws-themed ominous sound (Stage 7 detunes & boosts loudness)
+              audio.playSharkSFX(isStage7);
               
               // Schedule next shark gap (2 to 6 seconds)
               sharkGapTimer = 2000 + Math.random() * 4000;
@@ -2987,8 +3763,8 @@
           }
         }
 
-        // C. Stage 9 Laser Mechanics (Shoot bullets, update active bullets)
-        if (audio.globalLoopCount >= 17) {
+        // C. Stage 7 Laser Mechanics (Shoot bullets, update active bullets)
+        if (audio.globalLoopCount >= 14) {
           // 1. Firing interval logic
           timeSinceLastShot += currentSpeed;
           if (timeSinceLastShot >= nextLaserCooldown && sharks.length > 0) {
@@ -3100,12 +3876,12 @@
         }
       } else {
         sharks = [];
-        sharkGapTimer = 3000; // Reset / Hold gap timer if not in Stage 7+
+        sharkGapTimer = 3000; // Reset / Hold gap timer if not in Stage 6+
         bullets = []; // Clear active bullets
       }
 
-      // 8. Stage 10 Cyber-Octopus Mechanics (Loop 20+)
-      if (audio.globalLoopCount >= 20) {
+      // 8. Stage 8 Cyber-Octopus Mechanics (Loop 16+)
+      if (audio.globalLoopCount >= 16) {
         // A. Spawn Octopus if not present
         if (octopus === null) {
           let ox, oy;
@@ -3469,37 +4245,78 @@
       alertText = "";
       screenShake = 0;
       foods = []; // Clear any previous active foods!
-      
-      // Clear Stage 6 underwater states
-      isUnderwaterMode = false;
-      isTransitioningToStage6 = false;
-      stage6StartScore = 0;
-      if (audio.ctx && audio.underwaterFilter) {
-        audio.underwaterFilter.frequency.setValueAtTime(20000, audio.ctx.currentTime);
-      }
 
-      // Clear Stage 7 & 8 shark states
+      // Check starting stage selection
+      let startLoop = 0;
+      const menu = document.getElementById('stageSelectMenu');
+      if (menu && isStageMenuOpen) {
+        wasStageMenuOpenOnStart = true;
+        const select = document.getElementById('startStageSelect');
+        if (select) {
+          startLoop = parseInt(select.value, 10);
+        }
+        // Auto-hide the stage menu while the game is in progress
+        menu.classList.add('menu-hidden');
+      } else {
+        wasStageMenuOpenOnStart = false;
+      }
+      
+      // Clear Stage 5 underwater states
+      isUnderwaterMode = false;
+      isTransitioningToStage5 = false;
+      stage5StartScore = 0;
+
+      // Clear Stage 5+ shark states
       sharks = [];
       sharkGapTimer = 3000;
 
-      // Clear Stage 9 cosmic states
+      // Clear Stage 7 cosmic states
       underwaterFade = 0.0;
       bullets = [];
       timeSinceLastShot = 0;
       nextLaserCooldown = 3000;
-      stage9StartSpeed = 135;
-      stage9StartScore = 0;
+      stage7StartSpeed = 135;
+      stage7StartScore = 0;
+      isTransitioningToStage7 = (startLoop >= 14);
+      spaceWarpTransitionTimer = 0;
+      warpLines = [];
 
-      // Clear Stage 10 cosmic states
+      // Clear Stage 8 octopus states
       octopus = null;
       octopusTickCounter = 0;
 
+      // Set environment filters based on selected startLoop
+      if (audio.ctx && audio.underwaterFilter) {
+        if (startLoop >= 10 && startLoop < 14) {
+          isUnderwaterMode = true;
+          const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+          const targetFreq = isTouch ? 1200 : 900;
+          audio.underwaterFilter.frequency.setValueAtTime(targetFreq, audio.ctx.currentTime);
+          
+          // Initialize speed to 200ms and reset score baseline if starting directly under water
+          currentSpeed = 200;
+          stage5StartScore = 0;
+        } else {
+          audio.underwaterFilter.frequency.setValueAtTime(20000, audio.ctx.currentTime);
+        }
+      }
+
       spawnSnake();
-      spawnFood(0);
+      if (startLoop >= 10) {
+        spawnFood(0);
+        spawnFood(1);
+        spawnFood(2);
+      } else {
+        spawnFood(0);
+      }
       
-      audio.startMusic();
+      audio.startMusic(startLoop);
       
       gameActive = true;
+      
+      // Update menu select elements to disabled (immutable) while playing
+      updateMenuImmutability();
+      
       drawGame();
       
       if (gameLoopInterval) clearInterval(gameLoopInterval);
@@ -3510,6 +4327,12 @@
     function handleGameOver() {
       gameActive = false;
       clearInterval(gameLoopInterval);
+      
+      // Reset all transition variables to guarantee the menu is fully editable upon game over
+      isTransitioningToStage5 = false;
+      isTransitioningToStage7 = false;
+      submergeTransitionTimer = 0;
+      spaceWarpTransitionTimer = 0;
       
       // Stop background sequencer
       audio.stopMusic();
@@ -3522,6 +4345,20 @@
       bestAttemptVal.textContent = String(highScore).padStart(4, '0');
       
       gameOverScreen.classList.remove('hidden');
+
+      // Update stage select menu dropdown (enable/mutable again since game is not active)
+      updateMenuImmutability();
+
+      // Show stage select menu again if it was open on game start
+      if (wasStageMenuOpenOnStart) {
+        const menu = document.getElementById('stageSelectMenu');
+        if (menu) {
+          menu.classList.remove('menu-hidden');
+          isStageMenuOpen = true; // Sync open tracking state
+          updateMenuImmutability();
+        }
+        wasStageMenuOpenOnStart = false;
+      }
     }
 
     // --- BUTTON EVENT LISTENERS ---
@@ -3566,12 +4403,45 @@
     audioToggle.addEventListener('click', handleAudioToggle);
     audioToggle.addEventListener('touchstart', handleAudioToggle, { passive: false });
 
+    // --- STAGE SELECT MENU SYSTEM JS LOGIC ---
+    function toggleStageSelectMenu() {
+      if (gameActive) return; // Prevent manual toggling while game is in progress
+      const menu = document.getElementById('stageSelectMenu');
+      if (!menu) return;
+      menu.classList.toggle('menu-hidden');
+      isStageMenuOpen = !menu.classList.contains('menu-hidden'); // Track visibility state robustly
+      updateMenuImmutability();
+    }
+
+    function updateMenuImmutability() {
+      const select = document.getElementById('startStageSelect');
+      const menu = document.getElementById('stageSelectMenu');
+      if (!select || !menu) return;
+      
+      if (gameActive || isTransitioningToStage5 || isTransitioningToStage7) {
+        select.disabled = true;
+        menu.classList.add('menu-immutable');
+      } else {
+        select.disabled = false;
+        menu.classList.remove('menu-immutable');
+      }
+    }
+
+    // Toggle via Backtick/Tilde key on keyboard
+    window.addEventListener('keydown', (e) => {
+      if (e.key === '`' || e.key === '~') {
+        e.preventDefault();
+        toggleStageSelectMenu();
+      }
+    });
+
     function drawLoop() {
       drawGame();
       requestAnimationFrame(drawLoop);
     }
-
+ 
     window.onload = () => {
+      updateMenuImmutability(); // Initialize stage select immutability states
       requestAnimationFrame(drawLoop);
     };
   </script>
