@@ -2699,17 +2699,20 @@
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.restore();
 
-        // B. Vertical water ripple wave distortion
+        // B. Vertical water ripple wave distortion (Optimized for 60FPS responsive inputs on mobile screens)
         const waveSpeed = 0.07;
         const waveAmplitude = 5.5 * underwaterFade; // Wave amplitude scaled by fade
         const waveFrequency = 0.045;
         
-        for (let y = 0; y < canvas.height; y += 2) {
+        const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+        const stepY = isTouch ? 24 : 2; // Steps by 24px on mobile (only 25 slices) instead of 2px (300 slices) to eliminate CPU lag
+        
+        for (let y = 0; y < canvas.height; y += stepY) {
           const shiftX = Math.sin(y * waveFrequency + frameCount * waveSpeed) * waveAmplitude;
           ctx.drawImage(
             canvas,
-            0, y, canvas.width, 2, // source slice
-            shiftX, y, canvas.width, 2 // destination offset
+            0, y, canvas.width, stepY, // source slice
+            shiftX, y, canvas.width, stepY // destination offset
           );
         }
       }
@@ -3247,6 +3250,23 @@
       document.body.classList.add('touch-device');
     }
 
+    // Low-latency mobile audio autoplay resumer (safeguards context activations on direct touch gestures)
+    const resumeAudioOnGesture = () => {
+      audio.init();
+      if (audio.ctx && audio.ctx.state === 'suspended') {
+        audio.ctx.resume().then(() => {
+          console.log("AudioContext successfully resumed via user gesture.");
+          if (gameActive && !audio.isPlayingMusic) {
+            audio.startMusic();
+          }
+        }).catch(err => {
+          console.warn("Failed to resume AudioContext:", err);
+        });
+      }
+    };
+    document.addEventListener('touchstart', resumeAudioOnGesture, { once: true, passive: true });
+    document.addEventListener('mousedown', resumeAudioOnGesture, { once: true, passive: true });
+
     // Snappy steering helper (queues inputs up to 2 frames ahead, prevents self-collisions)
     function steer(targetDx, targetDy) {
       if (!gameActive) return;
@@ -3508,6 +3528,7 @@
 
     const handleStartPress = (e) => {
       e.preventDefault();
+      resumeAudioOnGesture(); // Instantly spin up AudioContext on first touch
       startScreen.classList.add('hidden');
       initializeGame();
     };
@@ -3517,6 +3538,7 @@
 
     const handleRestartPress = (e) => {
       e.preventDefault();
+      resumeAudioOnGesture(); // Safeguard AudioContext on replay touch
       gameOverScreen.classList.add('hidden');
       initializeGame();
     };
