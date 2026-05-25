@@ -489,6 +489,178 @@
       letter-spacing: 3px;
       text-transform: uppercase;
     }
+
+    /* Mobile Responsive Scaling & Touch Layout overrides */
+    .desktop-only {
+      display: flex !important;
+    }
+    .mobile-only {
+      display: none !important;
+    }
+
+    body.touch-device .desktop-only {
+      display: none !important;
+    }
+    body.touch-device .mobile-only {
+      display: flex !important;
+    }
+
+    body.touch-device {
+      touch-action: none;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+      overflow: hidden;
+    }
+
+    /* Virtual D-Pad styling */
+    .virtual-dpad {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      margin-top: 15px;
+      z-index: 15;
+    }
+
+    body.touch-device .virtual-dpad {
+      display: flex;
+    }
+
+    .dpad-middle-row {
+      display: flex;
+      align-items: center;
+      gap: 32px;
+    }
+
+    .dpad-btn {
+      width: 54px;
+      height: 54px;
+      background: rgba(13, 2, 17, 0.9);
+      border: 3px solid #00ffff;
+      color: #00ffff;
+      border-radius: 50%;
+      font-size: 18px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(0, 255, 255, 0.4), inset 0 0 5px rgba(0, 255, 255, 0.2);
+      transition: all 0.1s ease;
+      touch-action: manipulation;
+    }
+
+    .dpad-btn:active {
+      background: #00ffff;
+      color: #0d0211;
+      box-shadow: 0 0 20px rgba(0, 255, 255, 0.8);
+      transform: scale(0.92);
+    }
+
+    .dpad-btn.dpad-up, .dpad-btn.dpad-down {
+      border-color: #ff007f;
+      color: #ff007f;
+      box-shadow: 0 0 10px rgba(255, 0, 127, 0.4), inset 0 0 5px rgba(255, 0, 127, 0.2);
+    }
+
+    .dpad-btn.dpad-up:active, .dpad-btn.dpad-down:active {
+      background: #ff007f;
+      color: #0d0211;
+      box-shadow: 0 0 20px rgba(255, 0, 127, 0.8);
+    }
+
+    /* Media query for screens under 768px */
+    @media (max-width: 768px) {
+      body {
+        overflow-y: auto;
+        height: auto;
+        min-height: 100vh;
+        padding: 10px 0;
+        align-items: flex-start;
+      }
+      .arcade-container {
+        padding: 10px;
+        max-width: 100%;
+      }
+      .hud-bar {
+        padding: 8px 16px;
+        margin-bottom: 12px;
+        font-size: 8px;
+        border-width: 2px;
+      }
+      .hud-score-container {
+        gap: 15px;
+      }
+      .screen-bezel {
+        padding: 8px;
+        border-radius: 12px;
+        border-width: 1px;
+        box-shadow: 
+          inset 0 0 10px rgba(0,0,0,1),
+          0 5px 15px rgba(0,0,0,0.8),
+          0 0 0 2px #2b2b2b,
+          0 0 15px rgba(189, 0, 255, 0.3);
+      }
+      .screen-body {
+        width: 100%;
+        max-width: 92vw;
+        height: auto;
+        aspect-ratio: 1 / 1;
+        border-width: 2px;
+      }
+      canvas {
+        width: 100%;
+        height: 100%;
+      }
+      .title-glowing {
+        font-size: 18px;
+        line-height: 1.3;
+        margin-bottom: 12px;
+      }
+      .game-over-title {
+        font-size: 20px;
+        margin-bottom: 12px;
+      }
+      .game-info-text {
+        font-size: 8px;
+        margin-bottom: 12px;
+      }
+      .controls-guide {
+        padding: 6px 12px;
+        margin-bottom: 12px;
+        font-size: 7px;
+      }
+      .food-legend {
+        font-size: 6px;
+        margin-bottom: 18px;
+        gap: 6px;
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+      }
+      .btn-retro {
+        padding: 12px 24px;
+        font-size: 10px;
+        box-shadow: 
+          0 3px #7a0053,
+          0 0 15px rgba(255, 0, 127, 0.4);
+      }
+      .stat-box {
+        padding: 12px 24px;
+        margin-bottom: 18px;
+        min-width: 220px;
+      }
+      .stat-row {
+        font-size: 8px;
+        margin-bottom: 8px;
+      }
+      .footer-credit {
+        margin-top: 15px;
+        font-size: 7px;
+        letter-spacing: 2px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -536,7 +708,7 @@
           <h1 class="title-glowing">NEON SNAKE<br>198X</h1>
           <p class="game-info-text">Cybernetic Serpent Simulator</p>
           
-          <div class="controls-guide">
+          <div class="controls-guide desktop-only">
             <div class="control-row">
               <span class="control-key">W</span> / <span class="control-key">↑</span>
               <span class="control-key">S</span> / <span class="control-key">↓</span>
@@ -550,6 +722,15 @@
             <div class="control-row">
               <span class="control-key">ENTER</span>
               <span>START / RESTART GAME</span>
+            </div>
+          </div>
+
+          <div class="controls-guide mobile-only">
+            <div class="control-row">
+              <span>STEER: TAP D-PAD BUTTONS</span>
+            </div>
+            <div class="control-row">
+              <span>OR SWIPE CANVAS TO TURN</span>
             </div>
           </div>
 
@@ -569,7 +750,8 @@
           </div>
 
           <button id="startBtn" class="btn-retro">START GAME</button>
-          <div class="footer-credit">INSERT COIN OR PRESS ENTER</div>
+          <div class="footer-credit desktop-only">INSERT COIN OR PRESS ENTER</div>
+          <div class="footer-credit mobile-only">INSERT COIN OR TAP TO START</div>
         </div>
 
         <!-- 2. Game Over Screen Menu -->
@@ -589,13 +771,25 @@
           </div>
 
           <button id="restartBtn" class="btn-retro">PLAY AGAIN</button>
-          <div class="footer-credit">PRESS ENTER TO REINITIALIZE</div>
+          <div class="footer-credit desktop-only">PRESS ENTER TO REINITIALIZE</div>
+          <div class="footer-credit mobile-only">TAP PLAY AGAIN TO REINITIALIZE</div>
         </div>
 
         <!-- HTML5 Canvas for the Game -->
         <canvas id="gameCanvas" width="600" height="600"></canvas>
 
       </div>
+    </div>
+
+    <!-- Virtual D-Pad (only displayed on touch-screen browsers) -->
+    <div class="virtual-dpad">
+      <button id="dpad-up" class="dpad-btn dpad-up">▲</button>
+      <div class="dpad-middle-row">
+        <button id="dpad-left" class="dpad-btn dpad-left">◀</button>
+        <div class="dpad-center-spacer"></div>
+        <button id="dpad-right" class="dpad-btn dpad-right">▶</button>
+      </div>
+      <button id="dpad-down" class="dpad-btn dpad-down">▼</button>
     </div>
   </div>
 
@@ -3024,6 +3218,31 @@
       updatePhysics();
     }
 
+    // --- TOUCH SCREEN CONTROLS & DETECTION ---
+    function detectTouchDevice() {
+      return ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (navigator.msMaxTouchPoints > 0);
+    }
+
+    if (detectTouchDevice()) {
+      document.body.classList.add('touch-device');
+    }
+
+    // Snappy steering helper (queues inputs up to 2 frames ahead, prevents self-collisions)
+    function steer(targetDx, targetDy) {
+      if (!gameActive) return;
+      const lastMove = inputQueue.length > 0 ? inputQueue[inputQueue.length - 1] : { dx, dy };
+      
+      if (targetDx !== 0 && lastMove.dx !== -targetDx) {
+        if (inputQueue.length < 2) {
+          inputQueue.push({ dx: targetDx, dy: 0 });
+        }
+      } else if (targetDy !== 0 && lastMove.dy !== -targetDy) {
+        if (inputQueue.length < 2) {
+          inputQueue.push({ dx: 0, dy: targetDy });
+        }
+      }
+    }
+
     // --- INPUT PROCESSING (Keyboard Steering & Global Controls) ---
     document.addEventListener('keydown', e => {
       const arrows = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Enter'];
@@ -3047,36 +3266,95 @@
 
       if (!gameActive) return;
 
-      // Extract last targeted move context (either tail of queue, or head active direction)
-      const lastMove = inputQueue.length > 0 ? inputQueue[inputQueue.length - 1] : { dx, dy };
-      let newMove = null;
-
       switch(e.key.toLowerCase()) {
         case 'arrowup':
         case 'w':
-          if (lastMove.dy !== 1) newMove = { dx: 0, dy: -1 };
+          steer(0, -1);
           break;
         case 'arrowdown':
         case 's':
-          if (lastMove.dy !== -1) newMove = { dx: 0, dy: 1 };
+          steer(0, 1);
           break;
         case 'arrowleft':
         case 'a':
-          if (lastMove.dx !== 1) newMove = { dx: -1, dy: 0 };
+          steer(-1, 0);
           break;
         case 'arrowright':
         case 'd':
-          if (lastMove.dx !== -1) newMove = { dx: 1, dy: 0 };
+          steer(1, 0);
           break;
       }
+    });
 
-      if (newMove) {
-        // Only queue up to 2 frames ahead to keep controls extremely snappy and responsive
-        if (inputQueue.length < 2) {
-          inputQueue.push(newMove);
+    // Bind Virtual D-Pad Touch/Click Events
+    const dpadUp = document.getElementById('dpad-up');
+    const dpadDown = document.getElementById('dpad-down');
+    const dpadLeft = document.getElementById('dpad-left');
+    const dpadRight = document.getElementById('dpad-right');
+
+    const handleDpadPress = (e, tDx, tDy) => {
+      e.preventDefault(); // Prevents double taps or default scrolling
+      steer(tDx, tDy);
+    };
+
+    dpadUp.addEventListener('touchstart', e => handleDpadPress(e, 0, -1), { passive: false });
+    dpadDown.addEventListener('touchstart', e => handleDpadPress(e, 0, 1), { passive: false });
+    dpadLeft.addEventListener('touchstart', e => handleDpadPress(e, -1, 0), { passive: false });
+    dpadRight.addEventListener('touchstart', e => handleDpadPress(e, 1, 0), { passive: false });
+
+    // Desktop mouse fallback clicks on D-pad just in case
+    dpadUp.addEventListener('mousedown', () => steer(0, -1));
+    dpadDown.addEventListener('mousedown', () => steer(0, 1));
+    dpadLeft.addEventListener('mousedown', () => steer(-1, 0));
+    dpadRight.addEventListener('mousedown', () => steer(1, 0));
+
+    // Canvas Touch Swipes handler
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchEndX = 0;
+    let touchEndY = 0;
+
+    canvas.addEventListener('touchstart', e => {
+      touchStartX = e.changedTouches[0].screenX;
+      touchStartY = e.changedTouches[0].screenY;
+      // Block defaults only when playing
+      if (gameActive) {
+        e.preventDefault();
+      }
+    }, { passive: false });
+
+    canvas.addEventListener('touchmove', e => {
+      if (gameActive) {
+        e.preventDefault();
+      }
+    }, { passive: false });
+
+    canvas.addEventListener('touchend', e => {
+      touchEndX = e.changedTouches[0].screenX;
+      touchEndY = e.changedTouches[0].screenY;
+      if (gameActive) {
+        e.preventDefault();
+        handleSwipeGesture();
+      }
+    }, { passive: false });
+
+    function handleSwipeGesture() {
+      const diffX = touchEndX - touchStartX;
+      const diffY = touchEndY - touchStartY;
+      const threshold = 30; // Min swipe distance
+
+      if (Math.abs(diffX) > Math.abs(diffY)) {
+        if (Math.abs(diffX) > threshold) {
+          if (diffX > 0) steer(1, 0); // Right
+          else steer(-1, 0); // Left
+        }
+      } else {
+        if (Math.abs(diffY) > threshold) {
+          if (diffY > 0) steer(0, 1); // Down
+          else steer(0, -1); // Up
         }
       }
-    });
+    }
 
     // BFS Pathfinding Algorithm for Cyber-Octopus (Stage 10)
     function pathfindBFS(start, target) {
@@ -3208,18 +3486,27 @@
 
     // --- BUTTON EVENT LISTENERS ---
 
-    startBtn.addEventListener('click', () => {
+    const handleStartPress = (e) => {
+      e.preventDefault();
       startScreen.classList.add('hidden');
       initializeGame();
-    });
+    };
 
-    restartBtn.addEventListener('click', () => {
+    startBtn.addEventListener('click', handleStartPress);
+    startBtn.addEventListener('touchstart', handleStartPress, { passive: false });
+
+    const handleRestartPress = (e) => {
+      e.preventDefault();
       gameOverScreen.classList.add('hidden');
       initializeGame();
-    });
+    };
+
+    restartBtn.addEventListener('click', handleRestartPress);
+    restartBtn.addEventListener('touchstart', handleRestartPress, { passive: false });
 
     let audioState = true;
-    audioToggle.addEventListener('click', () => {
+    const handleAudioToggle = (e) => {
+      e.preventDefault();
       audioState = !audioState;
       if (audioState) {
         audioToggle.textContent = 'MUSIC: ON';
@@ -3233,7 +3520,9 @@
         audioToggle.classList.add('muted');
         audio.setMute(true);
       }
-    });
+    };
+    audioToggle.addEventListener('click', handleAudioToggle);
+    audioToggle.addEventListener('touchstart', handleAudioToggle, { passive: false });
 
     function drawLoop() {
       drawGame();

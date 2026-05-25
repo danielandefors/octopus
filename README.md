@@ -8,9 +8,17 @@
 
 ## 🎮 Game Basics & Controls
 
+### 💻 Desktop Controls
 - **Steering**: Use **Arrow Keys** or **W, A, S, D** to steer the snake.
 - **Start / Restart**: Press the **Enter** key to instantly start or restart when game over.
-- **Mute / Unmute**: Toggle the cabinet's retro volume via the audio switch on the cabinet.
+- **Mute / Unmute**: Toggle the cabinet's retro volume via the audio toggle button.
+
+### 📱 Mobile Touchscreen Controls
+- **Touch Detection**: The game automatically detects touch-capable browsers and activates mobile mode, adapting the layout dynamically.
+- **Virtual D-Pad**: Tap the glowing neon on-screen buttons below the cabinet screen (vertical keys are styled in pink, horizontal in cyan) for low-latency steering.
+- **Swipe Gestures**: Swipe anywhere on the game canvas (Up, Down, Left, or Right) to steer intuitively.
+- **Start / Restart / Mute**: Tap overlay buttons (`START GAME`, `PLAY AGAIN`, `MUSIC: ON/OFF`) directly for instant activation (bypassing the standard mobile 300ms tap-delay).
+
 
 ### 🍎 Food Tier System
 As you navigate the grid, three distinct tiers of glowing data packets spawn, accompanied by custom synthesized eat sound effects:
