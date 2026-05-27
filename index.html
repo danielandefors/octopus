@@ -1041,8 +1041,13 @@
 
       startMusic(startLoop = 0) {
         this.init();
-        if (this.ctx.state === 'suspended') {
-          this.ctx.resume();
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume().then(() => {
+            this.startMusic(startLoop);
+          }).catch(err => {
+            console.warn("Failed to resume context in startMusic:", err);
+          });
+          return;
         }
         
         if (this.isPlayingMusic) return;
@@ -2489,6 +2494,15 @@
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
 
+    // Performance optimization for mobile devices: shadowBlur is disabled globally to prevent massive rendering lag
+    const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (navigator.msMaxTouchPoints > 0);
+    if (isMobile) {
+      Object.defineProperty(CanvasRenderingContext2D.prototype, 'shadowBlur', {
+        set: function() {},
+        get: function() { return 0; }
+      });
+    }
+
     // UI elements
     const scoreVal = document.getElementById('scoreVal');
     const highScoreVal = document.getElementById('highScoreVal');
@@ -2524,6 +2538,7 @@
     let wasStageMenuOpenOnStart = false; // Tracks if stage select menu was open when game started
     let isStageMenuOpen = false;         // Tracks if stage select menu is currently open/visible to player
     let submergeTransitionTimer = 0;     // Ticks remaining for the transition freeze
+    let submergeTransitionStartTime = 0; // Timestamp of submerge transition start
     let bubbleParticles = [];            // Special transition bubble particles
     
     // Segment growth accumulation
@@ -2556,6 +2571,7 @@
     let stage7StartScore = 0;
     let stars = [];
     let spaceWarpTransitionTimer = 0;
+    let spaceWarpTransitionStartTime = 0; // Timestamp of space warp transition start
     let isTransitioningToStage7 = false;
     let warpLines = [];
     let ambientBubbles = [];
@@ -2579,6 +2595,7 @@
       stage5StartScore = score; // Record score IMMEDIATELY upon entering Stage 5
       
       submergeTransitionTimer = 90; // ~1.5 seconds freeze at 60fps canvas draw rate
+      submergeTransitionStartTime = Date.now();
       
       // Clear and generate transition bubble particles rising from bottom of the screen
       bubbleParticles = [];
@@ -2617,6 +2634,7 @@
       isTransitioningToStage7 = true;
       
       spaceWarpTransitionTimer = 90; // ~1.5 seconds freeze at 60fps canvas draw rate
+      spaceWarpTransitionStartTime = Date.now();
       
       // Generate warp horizontal streaks
       warpLines = [];
@@ -2765,6 +2783,16 @@
     let frameCount = 0;
     
     function drawGame() {
+      // Calculate time-based stage transition timers to ensure exactly 1.5s freeze even during mobile lag
+      if (isTransitioningToStage5 && submergeTransitionStartTime > 0) {
+        const elapsed = Date.now() - submergeTransitionStartTime;
+        submergeTransitionTimer = Math.max(0, 90 - Math.floor((elapsed / 1500) * 90));
+      }
+      if (isTransitioningToStage7 && spaceWarpTransitionStartTime > 0) {
+        const elapsed = Date.now() - spaceWarpTransitionStartTime;
+        spaceWarpTransitionTimer = Math.max(0, 90 - Math.floor((elapsed / 1500) * 90));
+      }
+
       // Update underwater fade factor dynamically
       if (audio.globalLoopCount >= 14) {
         underwaterFade = Math.max(0.0, underwaterFade - 0.015);
@@ -3429,11 +3457,10 @@
         // D. Trigger heavy screen shake during transition
         screenShake = Math.max(screenShake, 5.0);
 
-        // E. Decrement transition frame timer
-        submergeTransitionTimer--;
-        
-        // F. On transition end, plunge speed instantly to 200ms sub-aquatic rate
+        // E. Check if transition has finished based on time
         if (submergeTransitionTimer === 0) {
+          isTransitioningToStage5 = false;
+          submergeTransitionStartTime = 0;
           currentSpeed = 200;
           clearInterval(gameLoopInterval);
           gameLoopInterval = setInterval(gameStep, currentSpeed);
@@ -3521,11 +3548,10 @@
         // E. Screen shake
         screenShake = Math.max(screenShake, 6.0);
 
-        // F. Decrement frame timer
-        spaceWarpTransitionTimer--;
-
-        // G. On warp end, transition is complete
+        // F. Check if transition has finished based on time
         if (spaceWarpTransitionTimer === 0) {
+          isTransitioningToStage7 = false;
+          spaceWarpTransitionStartTime = 0;
           stage7StartScore = score;
           currentSpeed = stage7StartSpeed;
           clearInterval(gameLoopInterval);
@@ -4309,6 +4335,7 @@
       // Clear Stage 5 underwater states
       isUnderwaterMode = false;
       isTransitioningToStage5 = false;
+      submergeTransitionStartTime = 0;
       stage5StartScore = 0;
 
       // Clear Stage 5+ shark states
@@ -4324,6 +4351,7 @@
       stage7StartScore = 0;
       isTransitioningToStage7 = (startLoop >= 14);
       spaceWarpTransitionTimer = 0;
+      spaceWarpTransitionStartTime = 0;
       warpLines = [];
       ambientBubbles = [];
 
@@ -4378,7 +4406,9 @@
       isTransitioningToStage5 = false;
       isTransitioningToStage7 = false;
       submergeTransitionTimer = 0;
+      submergeTransitionStartTime = 0;
       spaceWarpTransitionTimer = 0;
+      spaceWarpTransitionStartTime = 0;
       ambientBubbles = [];
       
       // Stop background sequencer
