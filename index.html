@@ -1042,12 +1042,9 @@
       startMusic(startLoop = 0) {
         this.init();
         if (this.ctx && this.ctx.state === 'suspended') {
-          this.ctx.resume().then(() => {
-            this.startMusic(startLoop);
-          }).catch(err => {
-            console.warn("Failed to resume context in startMusic:", err);
+          this.ctx.resume().catch(err => {
+            console.warn("Failed synchronous context resume:", err);
           });
-          return;
         }
         
         if (this.isPlayingMusic) return;
@@ -2078,9 +2075,13 @@
         osc.stop(now + 0.15);
       }
 
-      // --- SEQUENCER CLOCK ---
       scheduler() {
         if (!this.isPlayingMusic) return;
+
+        // Reset clock if we fell behind (e.g., due to background tab suspension or initial mobile resume delay)
+        if (this.nextNoteTime < this.ctx.currentTime) {
+          this.nextNoteTime = this.ctx.currentTime;
+        }
 
         while (this.nextNoteTime < this.ctx.currentTime + this.scheduleAheadTime) {
           this.scheduleNextStep(this.currentStep, this.nextNoteTime);
