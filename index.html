@@ -4100,6 +4100,7 @@
 
     // Low-latency mobile audio autoplay resumer (safeguards context activations on direct touch gestures)
     const resumeAudioOnGesture = () => {
+      if (audio.isPlayingMusic) return; // Prevent duplicate resume if music is already playing!
       audio.init();
       if (audio.ctx && audio.ctx.state === 'suspended') {
         audio.ctx.resume().then(() => {
@@ -4443,7 +4444,7 @@
 
     const handleStartPress = (e) => {
       e.preventDefault();
-      resumeAudioOnGesture(); // Instantly spin up AudioContext on first touch
+      e.stopPropagation(); // Prevent bubbling up to document gesture listener
       startScreen.classList.add('hidden');
       initializeGame();
     };
@@ -4453,7 +4454,7 @@
 
     const handleRestartPress = (e) => {
       e.preventDefault();
-      resumeAudioOnGesture(); // Safeguard AudioContext on replay touch
+      e.stopPropagation(); // Prevent bubbling up to document gesture listener
       gameOverScreen.classList.add('hidden');
       initializeGame();
     };
@@ -4464,6 +4465,7 @@
     let audioState = true;
     const handleAudioToggle = (e) => {
       e.preventDefault();
+      e.stopPropagation(); // Prevent bubbling up to document gesture listener
       audioState = !audioState;
       if (audioState) {
         audioToggle.textContent = 'MUSIC: ON';
