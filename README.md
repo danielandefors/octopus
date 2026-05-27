@@ -43,11 +43,11 @@ The cabinet features a dynamic, multi-voice Web Audio API synthesizer sequencer 
 * Hi-hats double to a relentless sixteenth-note closed-hat roll, while the lead melody is octave-doubled with an extremely bright resonant cutoff filter.
 
 ### 🔴 Stage 4: Headbanger Overdrive (Loop 8)
-* Massive overdrive waveshaper distortion, detuned chorused saw/triangle chugs, arena snare claps, and screen shakes synced to kicks and claps. Grid lines and visual slices glitch in sync with the beat.
+* Massive overdrive waveshaper distortion, warmer chorused saw/triangle bass chugs, arena snare claps, screen shakes, and beat-synced visual grid slices. The standard single food item expands to **3 simultaneous food glitches** on the grid.
 
 ### 🔵 Stage 5: Sub-Aquatic Chasm (Loop 10)
 * **High-Impact Submersion Transition**: Gameplay freezes for 1.5 seconds as a translucent deep blue wave rises with 45 sinusoidal bubble particles. A dual swoosh and pitch-dive sweep runs as audio filters drop to a muffled `900Hz` (submerged).
-* **Caribbean Dub Riddim**: Plays a deep low-passed reggae bassline, offbeat chord skanks with tape delay feedback, rimshot One-Drop drum beats, hi-hat bubble swings, and steel-drum chime fills. standard 1 food item expands to **3 simultaneous food glitches** on the grid.
+* **Caribbean Dub Riddim**: Plays a deep low-passed reggae bassline, offbeat chord skanks with tape delay feedback, rimshot One-Drop drum beats, hi-hat bubble swings, and steel-drum chime fills. Maintains the **3 simultaneous food glitches** from Stage 4, while a few **subtle, highly translucent ambient bubbles** float slowly from the bottom to the top in the background of the play area.
 
 ### 🦈 Stage 6: Deep Cyber Sharks (Loop 12)
 * **Atmospheric Suspense**: Plays a stripped-down, suspenseful reggae/dub groove (no flute lead) to build deep underwater tension before launch.
@@ -59,7 +59,7 @@ The cabinet features a dynamic, multi-voice Web Audio API synthesizer sequencer 
 * **Neon Projectiles**: Cyber Sharks shoot fast neon lasers (2 cells per tick) in cardinal directions. Bullets destroy head hits (Game Over) or shoot other sharks (red self-destruct explosion).
 
 ### 🐙 Stage 8: Deep Sector Octopus (Loop 16)
-* **Cyber-Octopus NPC Spawns**: Renders an animated Cyber-Octopus with 8 waving tentacles and eyes tracking the nearest food, walking slowly once every 3 ticks.
+* **Cyber-Octopus NPC Spawns**: Renders an animated Cyber-Octopus with 8 waving tentacles and eyes tracking the nearest food, walking at 75% the speed of the snake (taking 3 steps every 4 ticks).
 * **BFS AI Pathfinding**: The octopus runs a Breadth-First Search (BFS) pathfinder to navigate to the closest unenhanced food, treating snake body segments and active 2x2 sharks as impassable walls.
 * **Food Portals**: When the octopus eats a food, it chimes a major arpeggio, upgrading it to a portal worth **1000 points** with custom gold explosion particles.
 * **Intelligent Bounce**: If the snake head bumps into the octopus, the snake plays a springy bounce sound, bursts cyan particles, and **instantly steers** into a safe corridor.

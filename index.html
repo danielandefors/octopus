@@ -1209,20 +1209,12 @@
           osc2.frequency.setValueAtTime(freq / 2, time);
         }
 
-        // Stage 4 & 7 detuned supersaw helper oscillators
+        // Stage 4 detuned supersaw helper oscillator (Cosmic stages toned down to match Stage 3, so no osc3/osc4)
         let osc3 = null;
         let osc4 = null;
-        if (globalLoopCount >= 14) {
+        if (globalLoopCount >= 8 && globalLoopCount < 10) {
           osc3 = this.ctx.createOscillator();
-          osc3.type = 'sawtooth';
-          osc3.frequency.setValueAtTime(freq + 4.5, time); // Stage 7+: chorus sharp detune
-          
-          osc4 = this.ctx.createOscillator();
-          osc4.type = 'sawtooth';
-          osc4.frequency.setValueAtTime(freq - 4.5, time); // Stage 7+: chorus flat detune
-        } else if (globalLoopCount >= 8) {
-          osc3 = this.ctx.createOscillator();
-          osc3.type = 'sawtooth';
+          osc3.type = 'triangle'; // triangle detuning is much warmer and less buzzy than sawtooth
           osc3.frequency.setValueAtTime(freq - 3, time); // Stage 4: detuned chorus sweep flat
         }
 
@@ -1236,14 +1228,14 @@
           startCutoff = 130;
           endCutoff = 220;
           filterQ = 1.0;
-        } else if (globalLoopCount >= 14) { // Cosmic Space: Extreme Resonant Acid Squelch Growl!
-          startCutoff = 800;
-          endCutoff = 3500;
-          filterQ = 6.0;
-        } else if (globalLoopCount >= 8) { // Stage 4: High Resonant growl chug!
-          startCutoff = 600;
-          endCutoff = 2900;
-          filterQ = 4.2; // Squelchy growl
+        } else if (globalLoopCount >= 14) { // Cosmic Space: Toned down to match Stage 3 exactly
+          startCutoff = 550;
+          endCutoff = 2700;
+          filterQ = 1.5;
+        } else if (globalLoopCount >= 8) { // Stage 4: Toned down to be close to Stage 3 chug
+          startCutoff = 560;
+          endCutoff = 2750;
+          filterQ = 1.8; // Much smoother squelch, toned down from 4.2 to be close to Stage 3 (1.5)
         } else if (globalLoopCount >= 6) { // Stage 3 Apex
           startCutoff = 550;
           endCutoff = 2700;
@@ -1259,7 +1251,7 @@
         filter.frequency.exponentialRampToValueAtTime(70, time + duration);
         filter.Q.setValueAtTime(filterQ, time);
 
-        const gainLevel = isSubmerged ? 2.1 : (globalLoopCount >= 14 ? 1.05 : globalLoopCount >= 8 ? 0.95 : globalLoopCount >= 6 ? 0.90 : globalLoopCount >= 4 ? 0.82 : 0.75);
+        const gainLevel = isSubmerged ? 2.1 : (globalLoopCount >= 14 ? 0.90 : globalLoopCount >= 8 ? 0.88 : globalLoopCount >= 6 ? 0.90 : globalLoopCount >= 4 ? 0.82 : 0.75);
         gain.gain.setValueAtTime(gainLevel, time); 
         gain.gain.exponentialRampToValueAtTime(0.01, time + duration);
 
@@ -1512,7 +1504,7 @@
         // Calculate volumes
         let leadVolume = isStage4 ? (isTouch ? 0.075 : 0.042) : (isHighIntensity ? 0.09 : 0.08);
         if (isCosmic) {
-          leadVolume = isTouch ? 0.095 : 0.065; // Balanced for three oscillators
+          leadVolume = isTouch ? 0.10 : 0.07; // Perfectly balanced for fast driving 16th-note arpeggios
         }
         
         gain.gain.setValueAtTime(0, time);
@@ -1522,20 +1514,20 @@
 
         // Connect oscillators
         if (isCosmic) {
-          // Connect detuned saws directly to filter
+          // Connect detuned saws directly to filter at balanced gains (boosted from 0.12, but reduced from 0.38)
           const sawMix1 = this.ctx.createGain();
-          sawMix1.gain.setValueAtTime(0.12, time);
+          sawMix1.gain.setValueAtTime(0.20, time);
           osc1.connect(sawMix1);
           sawMix1.connect(filter);
 
           const sawMix2 = this.ctx.createGain();
-          sawMix2.gain.setValueAtTime(0.12, time);
+          sawMix2.gain.setValueAtTime(0.20, time);
           osc2.connect(sawMix2);
           sawMix2.connect(filter);
 
-          // Connect sub-square to filter at lower volume to glue the low end together
+          // Connect sub-square to filter at lower volume to glue the low end together (boosted from 0.08, but reduced from 0.24)
           const subMix = this.ctx.createGain();
-          subMix.gain.setValueAtTime(0.08, time);
+          subMix.gain.setValueAtTime(0.12, time);
           osc3.connect(subMix);
           subMix.connect(filter);
         } else {
@@ -1963,7 +1955,7 @@
         
         // Jaws pattern: low rumbling E2 and F2 alternating, speeding up!
         const intervals = isStage7 
-          ? [0.0, 0.35, 0.65, 0.90, 1.10, 1.25, 1.40, 1.50] // Stage 7: faster, more notes for extreme prominence!
+          ? [0.0, 0.35, 0.65, 0.90, 1.10, 1.25, 1.40, 1.50] // Stage 7: faster, more notes
           : [0.0, 0.45, 0.85, 1.20, 1.50, 1.75]; 
         const freqs = isStage7
           ? [82.41, 87.31, 82.41, 87.31, 82.41, 87.31, 82.41, 87.31]
@@ -1974,25 +1966,26 @@
           const freq = freqs[idx];
           
           const osc1 = this.ctx.createOscillator();
-          const osc2 = isStage7 ? this.ctx.createOscillator() : null; // Stage 7: detuned dual supersaw sub-growl!
+          const osc2 = isStage7 ? this.ctx.createOscillator() : null; // Stage 7: detuned dual growl
           const gain = this.ctx.createGain();
           const filter = this.ctx.createBiquadFilter();
           
-          osc1.type = 'sawtooth';
+          // Use triangle waves for a much warmer, subtle, sub-bass throb that doesn't muddy the mix
+          osc1.type = 'triangle';
           osc1.frequency.setValueAtTime(freq, triggerTime);
           
           if (osc2) {
-            osc2.type = 'sawtooth';
+            osc2.type = 'triangle';
             osc2.frequency.setValueAtTime(freq - 3, triggerTime); // slightly detuned flat
           }
           
           filter.type = 'lowpass';
-          filter.frequency.setValueAtTime(isStage7 ? 260 : 150, triggerTime); // Stage 7: opens up cutoff for massive buzzy presence!
-          filter.Q.setValueAtTime(isStage7 ? 4.0 : 1.0, triggerTime);
+          filter.frequency.setValueAtTime(isStage7 ? 140 : 100, triggerTime); // Muffler cutoff for clean sub bass
+          filter.Q.setValueAtTime(isStage7 ? 2.0 : 1.0, triggerTime);
           
           gain.gain.setValueAtTime(0, triggerTime);
-          const maxGain = isStage7 ? 1.4 : 0.7; // Stage 7: twice as loud!
-          gain.gain.linearRampToValueAtTime(maxGain, triggerTime + 0.08); 
+          const maxGain = isStage7 ? 0.38 : 0.22; // Quiet and subtle, blending into the background
+          gain.gain.linearRampToValueAtTime(maxGain, triggerTime + 0.10); 
           gain.gain.exponentialRampToValueAtTime(0.001, triggerTime + (isStage7 ? 0.45 : 0.35));
           
           osc1.connect(filter);
@@ -2423,26 +2416,29 @@
         ];
 
         const cosmicMelody = [
-          // Bar 1 (Am9 vibe: E6 -> G6 -> B6 -> A6 -> E6)
-          1318.51, 0, 0, 1567.98, 0, 1975.53, 0, 0, 1760.00, 0, 0, 0, 1318.51, 0, 0, 0,
-          // Bar 2 (D9 vibe: F#6 -> A6 -> C#7 -> B6 -> F#6)
-          1479.98, 0, 0, 1760.00, 0, 2217.46, 0, 0, 1975.53, 0, 0, 0, 1479.98, 0, 0, 0,
-          // Bar 3 (Fmaj7 vibe: E6 -> G6 -> C7 -> A6 -> F6)
-          1318.51, 0, 0, 1567.98, 0, 2093.00, 0, 0, 1760.00, 0, 0, 0, 1396.91, 0, 0, 0,
-          // Bar 4 (G6/9 vibe: D6 -> G6 -> B6 -> D7 -> G6)
-          1174.66, 0, 1567.98, 0, 1975.53, 0, 0, 0, 2349.32, 0, 1975.53, 0, 1567.98, 0, 0, 0
+          // Bar 1 (Am9 vibe - Driving 16th-note rhythmic arpeggio: A6 -> E6 -> A6 -> C7...)
+          1760.00, 1318.51, 1760.00, 2093.00, 1760.00, 1318.51, 1760.00, 2093.00, 
+          1760.00, 1318.51, 1760.00, 2093.00, 1760.00, 1318.51, 1760.00, 2093.00,
+          // Bar 2 (D9 vibe - Driving 16th-note rhythmic arpeggio: F#6 -> D6 -> F#6 -> A6...)
+          1479.98, 1174.66, 1479.98, 1760.00, 1479.98, 1174.66, 1479.98, 1760.00, 
+          1479.98, 1174.66, 1479.98, 1760.00, 1479.98, 1174.66, 1479.98, 1760.00,
+          // Bar 3 (Fmaj7 vibe - Driving 16th-note rhythmic arpeggio: F6 -> C6 -> F6 -> A6...)
+          1396.91, 1046.50, 1396.91, 1760.00, 1396.91, 1046.50, 1396.91, 1760.00, 
+          1396.91, 1046.50, 1396.91, 1760.00, 1396.91, 1046.50, 1396.91, 1760.00,
+          // Bar 4 (G6/9 vibe - Driving 16th-note rhythmic arpeggio: G6 -> D6 -> G6 -> B6...)
+          1567.98, 1174.66, 1567.98, 1975.53, 1567.98, 1174.66, 1567.98, 1975.53, 
+          1567.98, 1174.66, 1567.98, 1975.53, 1567.98, 1174.66, 1567.98, 1975.53
         ];
 
         let targetFreq = isCosmicMode ? cosmicMelody[this.globalStep] : melody[this.globalStep];
 
         if (!isSubmergedMode && targetFreq > 0) {
           if (isCosmicMode) {
-            // Space cosmic lead: very long, smooth glides / soft chime space echo
-            this.playLead(targetFreq, time, stepDuration * 2.5, true);
+            // Space cosmic lead: Driving staccato sixteenth-note pluck zaps (short duration)
+            this.playLead(targetFreq, time, stepDuration * 0.72, true);
             
-            // Double space delay echoes shifted up a perfect fifth! (freq * 1.5)
-            this.playLead(targetFreq * 1.5, time + stepDuration * 0.5, stepDuration * 1.5, true);
-            this.playLead(targetFreq * 1.5, time + stepDuration * 1.0, stepDuration * 0.8, true);
+            // Light space delay echo shifted up a perfect fifth! (freq * 1.5) at a clean syncopated delay offset
+            this.playLead(targetFreq * 1.5, time + stepDuration * 1.5, stepDuration * 0.5, true);
           } else {
             this.playLead(targetFreq, time, stepDuration * 1.8, isIntensityEngaged);
             
@@ -2562,6 +2558,7 @@
     let spaceWarpTransitionTimer = 0;
     let isTransitioningToStage7 = false;
     let warpLines = [];
+    let ambientBubbles = [];
 
     // Stage 8 Cyber-Octopus States
     let octopus = null;
@@ -2801,6 +2798,54 @@
       // 1. Screen Refresh - Ghosting trail
       ctx.fillStyle = 'rgba(13, 2, 17, 0.28)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Draw subtle ambient floating bubbles in submerged stages (Loop 10-13)
+      if (isSubmergedMode) {
+        // Initialize ambient bubbles if empty
+        if (ambientBubbles.length === 0) {
+          for (let i = 0; i < 10; i++) {
+            ambientBubbles.push({
+              x: Math.random() * canvas.width,
+              y: Math.random() * canvas.height, // distribute vertically initially
+              radius: Math.random() * 3.5 + 1.5,
+              vy: -(Math.random() * 0.4 + 0.35), // slow gentle rise
+              swayFreq: Math.random() * 0.03 + 0.015,
+              swayAmp: Math.random() * 0.6 + 0.3,
+              alpha: Math.random() * 0.12 + 0.04 // extremely translucent to avoid distraction
+            });
+          }
+        }
+
+        // Draw and update ambient bubbles
+        ctx.save();
+        ambientBubbles.forEach(b => {
+          b.y += b.vy;
+          b.x += Math.sin(b.y * b.swayFreq) * b.swayAmp;
+          
+          // Wrap/Respawn at bottom if floats off screen
+          if (b.y + b.radius < 0) {
+            b.y = canvas.height + b.radius + Math.random() * 30;
+            b.x = Math.random() * canvas.width;
+            b.radius = Math.random() * 3.5 + 1.5;
+            b.vy = -(Math.random() * 0.4 + 0.35);
+            b.alpha = Math.random() * 0.12 + 0.04;
+          }
+
+          ctx.beginPath();
+          ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(0, 220, 255, ${b.alpha})`;
+          ctx.strokeStyle = `rgba(255, 255, 255, ${b.alpha * 1.5})`;
+          ctx.lineWidth = 0.5;
+          ctx.fill();
+          ctx.stroke();
+        });
+        ctx.restore();
+      } else {
+        // Clear ambient bubbles when leaving submerged mode
+        if (ambientBubbles.length > 0) {
+          ambientBubbles = [];
+        }
+      }
 
       // Draw open space celestial galaxy backdrop for Stage 7 (loop count >= 14)
       if (audio.globalLoopCount >= 14) {
@@ -3620,8 +3665,8 @@
         // Setup multi-segment pending growth ticks
         pendingGrowth += eatenFood.growthValue;
 
-        // If in Stage 5+, maintain 3 foods. Otherwise standard 1 food behavior.
-        if (audio.globalLoopCount >= 10) {
+        // If in Stage 4+, maintain 3 foods. Otherwise standard 1 food behavior.
+        if (audio.globalLoopCount >= 8) {
           spawnFood(foodEatenIndex);
         } else {
           foods.splice(foodEatenIndex, 1);
@@ -3630,16 +3675,15 @@
           }
         }
 
-        // Speed ramp scaling
+        // Speed ramp scaling (Constant decrease of 1.5ms per 100 points scored regardless of the stage)
         if (audio.globalLoopCount >= 14) {
           const stage7ScoreDiff = score - stage7StartScore;
-          const speedReduction = Math.floor(stage7ScoreDiff / 100) * 6.5; // Accelerate faster (6.5ms per 100 points) in Stage 7!
+          const speedReduction = Math.floor(stage7ScoreDiff / 100) * 1.5;
           currentSpeed = Math.max(65, stage7StartSpeed - speedReduction);
         } else if (audio.globalLoopCount >= 10) {
-          // Submerged speed ramp: start from 200ms, accelerate by 8ms per 100 points eaten under water
           const stage5ScoreDiff = score - stage5StartScore;
-          const speedReduction = Math.floor(stage5ScoreDiff / 100) * 8.0;
-          currentSpeed = Math.max(135, 200 - speedReduction); // never goes faster than normal baseSpeed (135ms) under water
+          const speedReduction = Math.floor(stage5ScoreDiff / 100) * 1.5;
+          currentSpeed = Math.max(135, 200 - speedReduction);
         } else {
           const speedReduction = Math.floor(score / 100) * 1.5;
           currentSpeed = Math.max(55, baseSpeed - speedReduction);
@@ -3656,8 +3700,8 @@
         }
       }
 
-      // Maintain up to 3 foods on the grid in Stage 5+!
-      if (audio.globalLoopCount >= 10 && foods.length < 3) {
+      // Maintain up to 3 foods on the grid in Stage 4+!
+      if (audio.globalLoopCount >= 8 && foods.length < 3) {
         while (foods.length < 3) {
           spawnFood(foods.length);
         }
@@ -3925,10 +3969,11 @@
           }
         }
         
-        // B. Update Octopus AI Walking (Once every 3 game ticks)
+        // B. Update Octopus AI Walking (75% the speed of the snake: takes 0.75 steps per tick on average!)
         if (octopus) {
-          octopusTickCounter++;
-          if (octopusTickCounter % 3 === 0) {
+          octopusTickCounter = (octopusTickCounter + 1) % 4;
+          const stepsToTake = (octopusTickCounter === 0) ? 0 : 1;
+          for (let stepCount = 0; stepCount < stepsToTake; stepCount++) {
             // Find closest unenhanced food (f.type !== 3)
             let closestFood = null;
             let minDist = Infinity;
@@ -4280,6 +4325,7 @@
       isTransitioningToStage7 = (startLoop >= 14);
       spaceWarpTransitionTimer = 0;
       warpLines = [];
+      ambientBubbles = [];
 
       // Clear Stage 8 octopus states
       octopus = null;
@@ -4302,7 +4348,7 @@
       }
 
       spawnSnake();
-      if (startLoop >= 10) {
+      if (startLoop >= 8) {
         spawnFood(0);
         spawnFood(1);
         spawnFood(2);
@@ -4333,6 +4379,7 @@
       isTransitioningToStage7 = false;
       submergeTransitionTimer = 0;
       spaceWarpTransitionTimer = 0;
+      ambientBubbles = [];
       
       // Stop background sequencer
       audio.stopMusic();
