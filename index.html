@@ -765,6 +765,18 @@
 </head>
 <body>
 
+  <!-- Floating On-Screen Debug Console for Mobile / Phone Verification -->
+  <div id="debugPanel" style="position: fixed; bottom: 10px; left: 10px; z-index: 10000; width: 280px; background: rgba(13, 2, 17, 0.9); border: 1px solid #ff007f; border-radius: 4px; padding: 6px; box-shadow: 0 0 10px rgba(255, 0, 127, 0.4); display: flex; flex-direction: column; overflow: hidden; pointer-events: auto;">
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 4px; margin-bottom: 4px;">
+      <span style="font-family: monospace; font-size: 8px; font-weight: bold; color: #ff007f;">DEBUG LOGS</span>
+      <div>
+        <button onclick="const el = document.getElementById('onScreenDebugConsole'); el.style.display = el.style.display === 'none' ? 'block' : 'none'; this.textContent = el.style.display === 'none' ? 'EXPAND' : 'COLLAPSE';" style="background: none; border: none; color: #00ffcc; font-family: monospace; font-size: 8px; cursor: pointer; padding: 0 4px; margin-right: 6px;">COLLAPSE</button>
+        <button onclick="document.getElementById('onScreenDebugConsole').innerHTML = '';" style="background: none; border: none; color: #00ffcc; font-family: monospace; font-size: 8px; cursor: pointer; padding: 0;">CLEAR</button>
+      </div>
+    </div>
+    <div id="onScreenDebugConsole" style="flex-grow: 1; overflow-y: auto; max-height: 110px; display: block;"></div>
+  </div>
+
   <!-- Retro Synthwave Perspective Grid Background -->
   <div class="synthwave-background">
     <div class="stars"></div>
@@ -911,6 +923,65 @@
 
   <!-- Audio and Game Logic Script -->
   <script>
+    // --- ON-SCREEN FLOATING MOBILE DEBUG CONSOLE ---
+    const debugLogs = [];
+    const maxDebugLogs = 100;
+    
+    function logToOnScreenConsole(type, ...args) {
+      const msg = args.map(arg => {
+        if (arg instanceof Error) {
+          return `${arg.message}\n${arg.stack}`;
+        }
+        if (typeof arg === 'object') {
+          try { return JSON.stringify(arg); } catch(e) { return String(arg); }
+        }
+        return String(arg);
+      }).join(' ');
+      
+      const timeStr = new Date().toLocaleTimeString();
+      debugLogs.push(`[${timeStr}] [${type.toUpperCase()}] ${msg}`);
+      if (debugLogs.length > maxDebugLogs) debugLogs.shift();
+      
+      const el = document.getElementById('onScreenDebugConsole');
+      if (el) {
+        el.innerHTML = debugLogs.map(log => {
+          let color = '#00ffcc'; // cyan for log
+          if (log.includes('[WARN]')) color = '#ffe600'; // yellow for warn
+          if (log.includes('[ERROR]')) color = '#ff007f'; // red for error
+          return `<div style="color: ${color}; margin-bottom: 4px; font-family: monospace; font-size: 9px; line-height: 1.25; white-space: pre-wrap; word-break: break-all;">${log}</div>`;
+        }).join('');
+        el.scrollTop = el.scrollHeight;
+      }
+    }
+
+    // Intercept standard console methods
+    const originalLog = console.log;
+    const originalWarn = console.warn;
+    const originalError = console.error;
+
+    console.log = function(...args) {
+      originalLog.apply(console, args);
+      logToOnScreenConsole('log', ...args);
+    };
+    console.warn = function(...args) {
+      originalWarn.apply(console, args);
+      logToOnScreenConsole('warn', ...args);
+    };
+    console.error = function(...args) {
+      originalError.apply(console, args);
+      logToOnScreenConsole('error', ...args);
+    };
+
+    // Capture global uncaught errors
+    window.addEventListener('error', function(e) {
+      console.error("Uncaught Runtime Error:", e.error || e.message);
+    });
+    window.addEventListener('unhandledrejection', function(e) {
+      console.error("Unhandled Promise Rejection:", e.reason);
+    });
+
+    console.log("On-screen debug console initialized successfully.");
+
     // --- WEB AUDIO API PROCEDURAL AUDIO SYSTEM ---
     class SynthManager {
       constructor() {
@@ -989,30 +1060,46 @@
 
       init() {
         if (this.ctx) return;
+        console.log("[AUDIO] init() triggered. Instantiating AudioContext...");
+        try {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          if (!AudioContextClass) {
+            console.error("[AUDIO] Neither AudioContext nor webkitAudioContext is supported on this browser!");
+            return;
+          }
+          this.ctx = new AudioContextClass();
+          console.log("[AUDIO] AudioContext created successfully. State:", this.ctx.state);
+        } catch (e) {
+          console.error("[AUDIO] Critical Error instantiating AudioContext:", e);
+          return;
+        }
         
-        // Create audio context
-        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-        this.ctx = new AudioContextClass();
-        
-        // Setup Master Gain Node for Volume & Mute control
-        this.masterVolume = this.ctx.createGain();
-        this.masterVolume.gain.setValueAtTime(0.3, this.ctx.currentTime); // Comfortable starting volume
-        
-        // Dynamic lowpass filter to muffle everything under water
-        this.underwaterFilter = this.ctx.createBiquadFilter();
-        this.underwaterFilter.type = 'lowpass';
-        this.underwaterFilter.frequency.setValueAtTime(20000, this.ctx.currentTime); // Default fully open
-        
-        // Connect muffled elements to underwaterFilter, which routes to masterVolume, which goes to destination
-        this.underwaterFilter.connect(this.masterVolume);
-        this.masterVolume.connect(this.ctx.destination);
+        try {
+          // Setup Master Gain Node for Volume & Mute control
+          this.masterVolume = this.ctx.createGain();
+          this.masterVolume.gain.setValueAtTime(0.3, this.ctx.currentTime); // Comfortable starting volume
+          
+          // Dynamic lowpass filter to muffle everything under water
+          this.underwaterFilter = this.ctx.createBiquadFilter();
+          this.underwaterFilter.type = 'lowpass';
+          this.underwaterFilter.frequency.setValueAtTime(20000, this.ctx.currentTime); // Default fully open
+          
+          // Connect muffled elements to underwaterFilter, which routes to masterVolume, which goes to destination
+          this.underwaterFilter.connect(this.masterVolume);
+          this.masterVolume.connect(this.ctx.destination);
 
-        // Setup gorgeous stereo convolution reverb for cosmic space leads
-        this.reverbNode = this.createReverbNode();
-        this.reverbGain = this.ctx.createGain();
-        this.reverbGain.gain.setValueAtTime(0.32, this.ctx.currentTime); // 32% wet level for spacious tail
-        this.reverbNode.connect(this.reverbGain);
-        this.reverbGain.connect(this.masterVolume);
+          // Setup gorgeous stereo convolution reverb for cosmic space leads
+          this.reverbNode = this.createReverbNode();
+          this.reverbGain = this.ctx.createGain();
+          this.reverbGain.gain.setValueAtTime(0.32, this.ctx.currentTime); // 32% wet level for spacious tail
+          if (this.reverbNode) {
+            this.reverbNode.connect(this.reverbGain);
+            this.reverbGain.connect(this.masterVolume);
+          }
+          console.log("[AUDIO] Node network successfully routed and connected.");
+        } catch (e) {
+          console.error("[AUDIO] Error building nodes/effects:", e);
+        }
       }
 
       createReverbNode() {
@@ -1040,21 +1127,31 @@
       }
 
       startMusic(startLoop = 0) {
+        console.log(`[AUDIO] startMusic(${startLoop}) called. Current playing status:`, this.isPlayingMusic);
         this.init();
-        if (this.ctx && this.ctx.state === 'suspended') {
-          this.ctx.resume().catch(err => {
-            console.warn("Failed synchronous context resume:", err);
-          });
+        if (this.ctx) {
+          console.log("[AUDIO] AudioContext state before potential resume:", this.ctx.state);
+          if (this.ctx.state === 'suspended') {
+            console.log("[AUDIO] Requesting AudioContext resume...");
+            this.ctx.resume().then(() => {
+              console.log("[AUDIO] AudioContext successfully transitioned to state:", this.ctx.state);
+            }).catch(err => {
+              console.error("[AUDIO] Critical Error during resume promise execution:", err);
+            });
+          }
         }
         
-        if (this.isPlayingMusic) return;
+        if (this.isPlayingMusic) {
+          console.log("[AUDIO] startMusic() bypassed because scheduler is already active.");
+          return;
+        }
         this.isPlayingMusic = true;
-        this.nextNoteTime = this.ctx.currentTime;
+        this.nextNoteTime = this.ctx ? this.ctx.currentTime : 0;
         this.currentStep = 0;
         this.globalStep = 0;
         this.globalLoopCount = startLoop;
         this.tempo = 126; // Reset tempo to default!
-        if (this.underwaterFilter) {
+        if (this.underwaterFilter && this.ctx) {
           if (startLoop >= 10 && startLoop < 16) {
             const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
             const targetFreq = isTouch ? 1200 : 900;
@@ -1065,6 +1162,7 @@
         }
         this.currentPatternIndex = Math.floor(Math.random() * this.highMelodyPatterns.length);
         this.consecutivePatternCount = 1;
+        console.log("[AUDIO] Music loop starting. Scheduling first tick at nextNoteTime:", this.nextNoteTime);
         this.scheduler();
       }
 
@@ -1785,8 +1883,8 @@
         pop.stop(time + 0.03);
       }
 
-      // 9. Advanced 8-Bit Eating SFX Tiers
       playEatSFX(type) {
+        console.log(`[AUDIO] playEatSFX(${type}) called. Ctx state:`, this.ctx ? this.ctx.state : 'null');
         this.init();
         if (!this.ctx || this.isMuted) return;
 
@@ -1849,8 +1947,8 @@
         }
       }
 
-      // 10. Sad retro crash game over sweep (FIXED: Corrected node connection)
       playGameOverSFX() {
+        console.log("[AUDIO] playGameOverSFX() called. Ctx state:", this.ctx ? this.ctx.state : 'null');
         this.init();
         if (!this.ctx || this.isMuted) return;
 
@@ -4443,6 +4541,7 @@
     // --- BUTTON EVENT LISTENERS ---
 
     const handleStartPress = (e) => {
+      console.log("[UI] handleStartPress triggered by user action:", e.type);
       e.preventDefault();
       e.stopPropagation(); // Prevent bubbling up to document gesture listener
       startScreen.classList.add('hidden');
@@ -4453,6 +4552,7 @@
     startBtn.addEventListener('touchstart', handleStartPress, { passive: false });
 
     const handleRestartPress = (e) => {
+      console.log("[UI] handleRestartPress triggered by user action:", e.type);
       e.preventDefault();
       e.stopPropagation(); // Prevent bubbling up to document gesture listener
       gameOverScreen.classList.add('hidden');
