@@ -765,18 +765,6 @@
 </head>
 <body>
 
-  <!-- Floating On-Screen Debug Console for Mobile / Phone Verification -->
-  <div id="debugPanel" style="position: fixed; bottom: 10px; left: 10px; z-index: 10000; width: 280px; background: rgba(13, 2, 17, 0.9); border: 1px solid #ff007f; border-radius: 4px; padding: 6px; box-shadow: 0 0 10px rgba(255, 0, 127, 0.4); display: flex; flex-direction: column; overflow: hidden; pointer-events: auto;">
-    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 4px; margin-bottom: 4px;">
-      <span style="font-family: monospace; font-size: 8px; font-weight: bold; color: #ff007f;">DEBUG LOGS</span>
-      <div>
-        <button onclick="const el = document.getElementById('onScreenDebugConsole'); el.style.display = el.style.display === 'none' ? 'block' : 'none'; this.textContent = el.style.display === 'none' ? 'EXPAND' : 'COLLAPSE';" style="background: none; border: none; color: #00ffcc; font-family: monospace; font-size: 8px; cursor: pointer; padding: 0 4px; margin-right: 6px;">COLLAPSE</button>
-        <button onclick="document.getElementById('onScreenDebugConsole').innerHTML = '';" style="background: none; border: none; color: #00ffcc; font-family: monospace; font-size: 8px; cursor: pointer; padding: 0;">CLEAR</button>
-      </div>
-    </div>
-    <div id="onScreenDebugConsole" style="flex-grow: 1; overflow-y: auto; max-height: 110px; display: block;"></div>
-  </div>
-
   <!-- Retro Synthwave Perspective Grid Background -->
   <div class="synthwave-background">
     <div class="stars"></div>
@@ -923,65 +911,6 @@
 
   <!-- Audio and Game Logic Script -->
   <script>
-    // --- ON-SCREEN FLOATING MOBILE DEBUG CONSOLE ---
-    const debugLogs = [];
-    const maxDebugLogs = 100;
-    
-    function logToOnScreenConsole(type, ...args) {
-      const msg = args.map(arg => {
-        if (arg instanceof Error) {
-          return `${arg.message}\n${arg.stack}`;
-        }
-        if (typeof arg === 'object') {
-          try { return JSON.stringify(arg); } catch(e) { return String(arg); }
-        }
-        return String(arg);
-      }).join(' ');
-      
-      const timeStr = new Date().toLocaleTimeString();
-      debugLogs.push(`[${timeStr}] [${type.toUpperCase()}] ${msg}`);
-      if (debugLogs.length > maxDebugLogs) debugLogs.shift();
-      
-      const el = document.getElementById('onScreenDebugConsole');
-      if (el) {
-        el.innerHTML = debugLogs.map(log => {
-          let color = '#00ffcc'; // cyan for log
-          if (log.includes('[WARN]')) color = '#ffe600'; // yellow for warn
-          if (log.includes('[ERROR]')) color = '#ff007f'; // red for error
-          return `<div style="color: ${color}; margin-bottom: 4px; font-family: monospace; font-size: 9px; line-height: 1.25; white-space: pre-wrap; word-break: break-all;">${log}</div>`;
-        }).join('');
-        el.scrollTop = el.scrollHeight;
-      }
-    }
-
-    // Intercept standard console methods
-    const originalLog = console.log;
-    const originalWarn = console.warn;
-    const originalError = console.error;
-
-    console.log = function(...args) {
-      originalLog.apply(console, args);
-      logToOnScreenConsole('log', ...args);
-    };
-    console.warn = function(...args) {
-      originalWarn.apply(console, args);
-      logToOnScreenConsole('warn', ...args);
-    };
-    console.error = function(...args) {
-      originalError.apply(console, args);
-      logToOnScreenConsole('error', ...args);
-    };
-
-    // Capture global uncaught errors
-    window.addEventListener('error', function(e) {
-      console.error("Uncaught Runtime Error:", e.error || e.message);
-    });
-    window.addEventListener('unhandledrejection', function(e) {
-      console.error("Unhandled Promise Rejection:", e.reason);
-    });
-
-    console.log("On-screen debug console initialized successfully.");
-
     // --- WEB AUDIO API PROCEDURAL AUDIO SYSTEM ---
     class SynthManager {
       constructor() {
