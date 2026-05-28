@@ -4212,6 +4212,8 @@
       }
     };
     document.addEventListener('touchstart', resumeAudioOnGesture, { once: true, passive: true });
+    document.addEventListener('touchend', resumeAudioOnGesture, { once: true, passive: true });
+    document.addEventListener('click', resumeAudioOnGesture, { once: true, passive: true });
     document.addEventListener('mousedown', resumeAudioOnGesture, { once: true, passive: true });
 
     // Snappy steering helper (queues inputs up to 2 frames ahead, prevents self-collisions)
@@ -4549,7 +4551,7 @@
     };
 
     startBtn.addEventListener('click', handleStartPress);
-    startBtn.addEventListener('touchstart', handleStartPress, { passive: false });
+    startBtn.addEventListener('touchend', handleStartPress, { passive: false });
 
     const handleRestartPress = (e) => {
       console.log("[UI] handleRestartPress triggered by user action:", e.type);
@@ -4560,7 +4562,7 @@
     };
 
     restartBtn.addEventListener('click', handleRestartPress);
-    restartBtn.addEventListener('touchstart', handleRestartPress, { passive: false });
+    restartBtn.addEventListener('touchend', handleRestartPress, { passive: false });
 
     let audioState = true;
     const handleAudioToggle = (e) => {
@@ -4581,7 +4583,7 @@
       }
     };
     audioToggle.addEventListener('click', handleAudioToggle);
-    audioToggle.addEventListener('touchstart', handleAudioToggle, { passive: false });
+    audioToggle.addEventListener('touchend', handleAudioToggle, { passive: false });
 
     // --- STAGE SELECT MENU SYSTEM JS LOGIC ---
     function toggleStageSelectMenu() {
